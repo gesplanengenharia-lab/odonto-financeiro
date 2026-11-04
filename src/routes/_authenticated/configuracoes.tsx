@@ -64,7 +64,7 @@ function CardRates() {
     e.preventDefault();
     const payload = Object.fromEntries(Object.entries(form).map(([k, v]) => [k, Number(v.replace(",", "."))]));
     const { error } = await supabase.from("card_settings").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", 1);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     qc.invalidateQueries({ queryKey: ["card_settings"] });
     toast.success("Taxas salvas");
   }
@@ -100,7 +100,7 @@ function Categories() {
   async function add(e: FormEvent) {
     e.preventDefault();
     const { error } = await supabase.from("categories").insert({ name, kind, nature: kind === "saida" ? nature : null });
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     setName("");
     qc.invalidateQueries({ queryKey: ["categories"] });
     toast.success("Categoria criada");
@@ -108,7 +108,7 @@ function Categories() {
   async function remove(id: string) {
     if (!confirm("Excluir categoria? Os lançamentos ficam sem categoria.")) return;
     const { error } = await supabase.from("categories").delete().eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     qc.invalidateQueries({ queryKey: ["categories"] });
   }
 
@@ -171,7 +171,7 @@ function Team() {
 
   async function grant(userId: string, role: "membro" | "admin") {
     const { error } = await supabase.from("user_roles").insert({ user_id: userId, role });
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success(role === "admin" ? "Agora é administrador" : "Acesso liberado");
     refetch();
     qc.invalidateQueries({ queryKey: ["my_access"] });
@@ -179,7 +179,7 @@ function Team() {
   async function revoke(userId: string) {
     if (!confirm("Remover o acesso desta pessoa?")) return;
     const { error } = await supabase.from("user_roles").delete().eq("user_id", userId);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success("Acesso removido");
     refetch();
   }

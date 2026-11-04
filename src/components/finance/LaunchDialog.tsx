@@ -107,7 +107,7 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!rows.length) return toast.error("Informe um valor maior que zero");
+    if (!rows.length) { toast.error("Informe um valor maior que zero"); return; }
     try {
       await create.mutateAsync(rows);
       toast.success(rows.length > 1 ? `${rows.length} lançamentos criados` : "Lançamento criado");

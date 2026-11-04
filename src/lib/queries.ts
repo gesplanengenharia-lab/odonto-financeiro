@@ -11,7 +11,7 @@ export interface Category {
 
 const PAGE = 1000;
 
-async function fetchTxns(filter: { column: "due_date" | "competence_date"; from?: string; to?: string }) {
+async function fetchTxns(filter: { column: "due_date" | "competence_date"; from?: string | undefined; to?: string | undefined }) {
   const all: Txn[] = [];
   for (let page = 0; ; page++) {
     let q = supabase

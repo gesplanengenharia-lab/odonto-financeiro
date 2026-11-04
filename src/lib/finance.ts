@@ -68,7 +68,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /** ISO date helpers working on calendar dates (no timezone drift). */
 export function parseISO(d: string): Date {
-  const [y, m, day] = d.split("-").map(Number);
+  const [y = 1970, m = 1, day = 1] = d.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, day));
 }
 export function toISO(d: Date): string {
@@ -114,7 +114,7 @@ export function splitAmount(total: number, parts: number): number[] {
   const cents = Math.round(total * 100);
   const base = Math.floor(cents / parts);
   const out = Array.from({ length: parts }, () => base);
-  out[parts - 1] += cents - base * parts;
+  out[parts - 1] = base + (cents - base * parts);
   return out.map((c) => c / 100);
 }
 
@@ -250,7 +250,7 @@ export function formatDate(iso: string | null) {
 }
 const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 export function formatMonth(key: string, long = false) {
-  const [y, m] = key.split("-");
+  const [y = "", m = "1"] = key.split("-");
   const names = long
     ? ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
     : MONTHS;

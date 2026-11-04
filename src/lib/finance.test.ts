@@ -45,7 +45,7 @@ describe("lançamento parcelado no crédito", () => {
   });
 
   it("débito cai no dia seguinte com taxa de 1,5%", () => {
-    const [row] = buildLaunchRows(
+    const row = buildLaunchRows(
       { kind: "entrada", description: "Consulta", payment_method: "debito", amount: 200, date: "2026-11-04", installments: 5 },
       settings,
       gid,
@@ -79,7 +79,7 @@ describe("boletos e despesas fixas", () => {
   });
 
   it("pix pago à vista entra como pago", () => {
-    const [row] = buildLaunchRows(
+    const row = buildLaunchRows(
       { kind: "entrada", description: "Limpeza", payment_method: "pix", amount: 150, date: "2026-11-04", installments: 1, paid: true },
       settings,
       gid,

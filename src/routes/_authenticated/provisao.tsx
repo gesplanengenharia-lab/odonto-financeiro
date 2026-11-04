@@ -21,7 +21,7 @@ function Provisao() {
   const [opening, setOpening] = useState("");
   const keys = nextMonths(current, months);
   const from = `${current}-01`;
-  const to = monthRange(keys[keys.length - 1]).end;
+  const to = monthRange(keys[keys.length - 1]!).end;
   const { data = [] } = useQuery(txnsByDueQuery(from, to));
   const openingValue = Number(opening.replace(/\./g, "").replace(",", ".")) || 0;
 
@@ -65,7 +65,7 @@ function Provisao() {
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Entradas previstas" value={totIn} tone="income" />
         <StatCard label="Saídas previstas" value={totOut} tone="expense" />
-        <StatCard label={`Saldo projetado em ${formatMonth(keys[keys.length - 1])}`} value={table[table.length - 1]?.balance ?? 0} tone="primary" />
+        <StatCard label={`Saldo projetado em ${formatMonth(keys[keys.length - 1]!)}`} value={table[table.length - 1]?.balance ?? 0} tone="primary" />
       </div>
 
       <div className="surface-card mt-4 p-6">
