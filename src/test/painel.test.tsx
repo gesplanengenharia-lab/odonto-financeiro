@@ -16,7 +16,11 @@ vi.mock("@tanstack/react-query", () => ({
     refetch: vi.fn(),
   }),
 }));
-vi.mock("@/lib/queries", () => ({ txnsByDueQuery: vi.fn(), txnsByCompetenceQuery: vi.fn() }));
+vi.mock("@/lib/queries", () => ({
+  txnsByDueQuery: vi.fn(),
+  txnsByCompetenceQuery: vi.fn(),
+  categoriesQuery: vi.fn(),
+}));
 vi.mock("@/components/finance/LaunchDialog", () => ({ LaunchDialog: () => null }));
 vi.mock("recharts", () => ({
   ResponsiveContainer: () => null,
@@ -30,6 +34,8 @@ vi.mock("recharts", () => ({
 }));
 import { Route } from "@/routes/_authenticated/painel";
 const Panel = Route.options.component as ComponentType;
+import { Route as SimulationRoute } from "@/routes/_authenticated/simulacao";
+const Simulation = SimulationRoute.options.component as ComponentType;
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -64,9 +70,22 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("Painel", () => {
-  it("só calcula aporte com saldo válido e preserva simulações separadas por mês", () => {
+describe("Painel e simulação", () => {
+  it("mantém a simulação fora do painel e mostra indicadores", () => {
     render(<Panel />);
+    expect(screen.queryByLabelText("Saldo inicial do mês (R$)")).not.toBeInTheDocument();
+    expect(screen.getByText("Simulação")).toBeInTheDocument();
+    expect(screen.getByLabelText("Indicadores percentuais do mês")).toBeInTheDocument();
+  });
+  it("não calcula aporte quando a consulta da simulação falha", () => {
+    state.error = true;
+    render(<Simulation />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Não foi possível carregar a simulação");
+    expect(screen.queryByLabelText("Saldo inicial do mês (R$)")).not.toBeInTheDocument();
+  });
+
+  it("só calcula aporte com saldo válido e preserva simulações separadas por mês", () => {
+    render(<Simulation />);
     expect(screen.getByText("Informe o saldo inicial para calcular o aporte")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Saldo inicial do mês (R$)"), {
       target: { value: "100,00" },

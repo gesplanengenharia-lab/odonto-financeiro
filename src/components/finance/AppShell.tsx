@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   LayoutDashboard,
+  Calculator,
   MessageCircle,
   Activity,
   ArrowLeftRight,
@@ -25,6 +26,7 @@ import { cn } from "@/lib/utils";
 
 const nav = [
   { to: "/painel", label: "Painel", icon: LayoutDashboard },
+  { to: "/simulacao", label: "Simulação", icon: Calculator },
   { to: "/lancamentos", label: "Lançamentos", icon: ArrowLeftRight },
   { to: "/contas", label: "Contas a pagar e receber", icon: CalendarClock },
   { to: "/cartoes", label: "Cartões", icon: CreditCard },

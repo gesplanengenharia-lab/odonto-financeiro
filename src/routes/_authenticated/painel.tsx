@@ -16,7 +16,8 @@ import {
   addMonths,
   cashValue,
   dashboardDay,
-  dashboardFunding,
+  dashboardIndicators,
+  dashboardCosts,
   dashboardMonth,
   formatBRL,
   formatDate,
@@ -31,7 +32,7 @@ import {
   todayISO,
   addDays,
 } from "@/lib/finance";
-import { txnsByCompetenceQuery, txnsByDueQuery } from "@/lib/queries";
+import { categoriesQuery, txnsByCompetenceQuery, txnsByDueQuery } from "@/lib/queries";
 import { LaunchDialog } from "@/components/finance/LaunchDialog";
 import {
   EmptyState,
@@ -55,11 +56,11 @@ function Painel() {
   const [month, setMonth] = useState(monthKey(today));
   const [selectedDay, setSelectedDay] = useState(today);
   const day = monthKey(selectedDay) === month ? selectedDay : `${month}-01`;
-  const [openings, setOpenings] = useState<Record<string, string>>({});
   const { start, end } = monthRange(month);
   // All dates are required: an old installment may have been settled this month.
   const cashQuery = useQuery(txnsByDueQuery());
   const compQuery = useQuery(txnsByCompetenceQuery(start, end));
+  const categoryQuery = useQuery(categoriesQuery());
   const cash = useMemo(() => cashQuery.data ?? [], [cashQuery.data]);
   const comp = compQuery.data ?? [];
   const m = useMemo(() => dashboardMonth(cash, month, today), [cash, month, today]);
@@ -71,13 +72,9 @@ function Painel() {
   const upcoming = pending
     .filter((t) => t.due_date >= today && t.due_date <= addDays(today, 7))
     .slice(0, 8);
-  const opening = openings[month] ?? "";
-  const openingValue = Number(opening.replace(/\./g, "").replace(",", "."));
-  const openingValid =
-    opening.trim() !== "" &&
-    /^-?(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?$/.test(opening.trim()) &&
-    Number.isFinite(openingValue);
-  const funding = openingValid ? dashboardFunding(m.projected, openingValue) : null;
+  const indicators = dashboardIndicators(cash, comp, month, today);
+  const costs = dashboardCosts(comp, categoryQuery.data ?? []);
+  const pct = (value: number | null) => (value === null ? "—" : formatPct(value));
   const history = nextMonths(monthKey(addMonths(start, -5)), 6).map((k) => {
     const row = dashboardMonth(cash, k, today);
     return { mes: formatMonth(k), Recebido: row.received, Pago: row.paid };
@@ -99,10 +96,13 @@ function Painel() {
     <div>
       <PageHeader
         title="Painel"
-        subtitle="O que entrou, o que falta receber e como o mês deve fechar"
+        subtitle="Recebimentos, despesas e indicadores do mês"
         actions={
           <>
             <MonthPicker value={month} onChange={setMonth} />
+            <Button asChild variant="outline">
+              <Link to="/simulacao">Simulação</Link>
+            </Button>
             <LaunchDialog />
           </>
         }
@@ -157,87 +157,46 @@ function Painel() {
             />
           </div>
 
-          <section className="surface-card mt-4 p-5 sm:p-6" aria-labelledby="closing-title">
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div>
-                <h2 id="closing-title" className="text-lg font-semibold">
-                  Vai dar para pagar as contas?
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Simule o fechamento de {formatMonth(month, true)} com o saldo que havia no início
-                  do mês.
-                </p>
-                <div className="mt-4 max-w-sm">
-                  <Label htmlFor="opening-balance">Saldo inicial do mês (R$)</Label>
-                  <Input
-                    id="opening-balance"
-                    className="mt-2"
-                    inputMode="decimal"
-                    placeholder="Ex.: 15.000,00"
-                    value={opening}
-                    aria-invalid={opening !== "" && !openingValid}
-                    aria-describedby="opening-help"
-                    onChange={(e) => setOpenings((prev) => ({ ...prev, [month]: e.target.value }))}
-                  />
-                  <p id="opening-help" className="mt-2 text-xs text-muted-foreground">
-                    Some banco e dinheiro disponíveis no primeiro dia. Simulação por mês, mantida
-                    apenas enquanto esta tela estiver aberta; não cria lançamento.
-                  </p>
-                  {opening !== "" && !openingValid && (
-                    <p className="mt-1 text-xs text-expense">Use um valor como 1.500,00 ou 0,00.</p>
-                  )}
-                </div>
-              </div>
-              <div
-                className={`rounded-xl p-5 ${funding && funding.closing < 0 ? "bg-expense-soft" : "bg-muted/50"}`}
-                aria-live="polite"
-              >
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {funding
-                    ? "Saldo projetado no fechamento"
-                    : "Informe o saldo inicial para calcular o aporte"}
-                </p>
-                <p
-                  className={`tabular mt-2 font-display text-3xl font-semibold ${funding && funding.closing < 0 ? "text-expense" : "text-income"}`}
-                >
-                  {funding ? formatBRL(funding.closing) : "—"}
-                </p>
-                <p className="mt-2 text-sm font-medium">
-                  {funding
-                    ? funding.contribution > 0
-                      ? `Aporte estimado para fechar o mês: ${formatBRL(funding.contribution)}`
-                      : "O saldo previsto cobre as contas cadastradas no fechamento."
-                    : `Sem saldo inicial, o movimento previsto é ${formatBRL(m.projected)}.`}
-                </p>
-                <dl className="mt-4 space-y-2 text-sm">
-                  <div className="flex justify-between gap-3">
-                    <dt>Entradas já recebidas + a vencer</dt>
-                    <dd className="tabular">{formatBRL(m.totalExpected)}</dd>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <dt>Pagamentos feitos + contas em aberto</dt>
-                    <dd className="tabular">− {formatBRL(m.totalOut)}</dd>
-                  </div>
-                  <div className="flex justify-between gap-3 text-muted-foreground">
-                    <dt>Inclui contas anteriores em aberto</dt>
-                    <dd className="tabular">{formatBRL(m.priorToPay)}</dd>
-                  </div>
-                </dl>
-              </div>
-            </div>
-            <p className="mt-4 border-t border-border pt-3 text-xs text-muted-foreground">
-              Projeção baseada apenas nos lançamentos cadastrados e no status atual. Não garante
-              saldo em cada dia: contas podem vencer antes dos recebimentos. Recebíveis atrasados do
-              mês ({formatBRL(m.overdueReceivable)}) e anteriores ({formatBRL(m.priorToReceive)})
-              ficam fora da previsão até serem pagos.
-            </p>
-            {m.missingPaidDates > 0 && (
-              <p className="mt-2 text-xs text-warning">
-                {m.missingPaidDates} lançamento(s) pago(s) sem data de pagamento: o vencimento foi
-                usado como referência.
-              </p>
-            )}
+          <section
+            className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+            aria-label="Indicadores percentuais do mês"
+          >
+            <StatCard
+              label="Resultado gerencial"
+              value={s.profit}
+              tone={s.profit >= 0 ? "income" : "expense"}
+              hint={`${pct(indicators.profitPct)} de margem sobre a receita bruta · competência`}
+            />
+            <StatCard
+              label="Inadimplência do mês"
+              value={indicators.defaultedAmount}
+              tone="warning"
+              hint={`${pct(indicators.defaultPct)} dos valores não-cartão com vencimento no mês até ontem`}
+            />
+            <StatCard
+              label="Despesas fixas"
+              value={s.fixedExpenses}
+              tone="expense"
+              hint={`${pct(indicators.fixedPct)} das despesas do mês · competência`}
+            />
+            <StatCard
+              label="Despesas variáveis / sem natureza"
+              value={s.variableExpenses}
+              tone="expense"
+              hint={`${pct(indicators.variablePct)} das despesas do mês · competência`}
+            />
           </section>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Inadimplência: valores ainda pendentes ÷ total com vencimento já passado no mês, sem
+            cartões. Despesas não incluem taxas de cartão. “—” indica ausência de base para
+            calcular.
+          </p>
+          {m.missingPaidDates > 0 && (
+            <p className="mt-2 text-xs text-warning">
+              {m.missingPaidDates} lançamento(s) pago(s) sem data de pagamento: o vencimento foi
+              usado como referência.
+            </p>
+          )}
 
           <section className="surface-card mt-4 overflow-hidden" aria-labelledby="methods-title">
             <div className="p-5 sm:p-6">
@@ -246,7 +205,8 @@ function Painel() {
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 Valores líquidos. Cartões já descontam as taxas; parcelas aparecem no respectivo mês
-                de recebimento.
+                de recebimento. O percentual mostra a participação no total líquido já recebido no
+                mês.
               </p>
             </div>
             <div className="overflow-x-auto">
@@ -268,6 +228,12 @@ function Painel() {
                       </th>
                       <td className="tabular px-5 py-3 text-right text-income">
                         {formatBRL(r.received)}
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {pct(
+                            indicators.byMethod.find((item) => item.method === r.method)
+                              ?.receivedPct ?? null,
+                          )}
+                        </span>
                       </td>
                       <td className="tabular px-5 py-3 text-right">{formatBRL(r.expected)}</td>
                       <td className="tabular px-5 py-3 text-right text-warning">
@@ -285,6 +251,77 @@ function Painel() {
               * Recebido pela data de pagamento + pendentes pelo vencimento. O total inclui
               atrasados; a projeção de fechamento não.
             </p>
+          </section>
+
+          <section className="surface-card mt-4 p-5 sm:p-6" aria-labelledby="costs-title">
+            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+              <h2 id="costs-title" className="text-base font-semibold">
+                Onde estão os custos do mês
+              </h2>
+              <span className="tabular font-semibold">{formatBRL(s.totalExpenses)}</span>
+            </div>
+            <p className="mb-4 text-xs text-muted-foreground">
+              Despesas por competência, pagas e pendentes. Percentuais sobre o total de despesas,
+              sem taxas de cartão.
+            </p>
+            {categoryQuery.isPending ? (
+              <p role="status">Carregando categorias…</p>
+            ) : categoryQuery.isError ? (
+              <p role="alert">
+                Não foi possível carregar as categorias.{" "}
+                <button className="underline" onClick={() => void categoryQuery.refetch()}>
+                  Tentar novamente
+                </button>
+              </p>
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-2">
+                {costs
+                  .filter((group) => group.nature !== null || group.rows.length > 0)
+                  .map((group) => (
+                    <div key={group.label} className="rounded-xl border border-border p-4">
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <h3 className="font-semibold">{group.label}</h3>
+                        <span className="tabular font-semibold">
+                          {formatBRL(group.amount)}{" "}
+                          <span className="text-xs font-normal text-muted-foreground">
+                            {pct(group.percent)} do total
+                          </span>
+                        </span>
+                      </div>
+                      {group.rows.length === 0 ? (
+                        <p className="mt-4 text-sm text-muted-foreground">
+                          Sem despesas neste grupo.
+                        </p>
+                      ) : (
+                        <ul className="mt-4 space-y-4">
+                          {group.rows.map((row) => (
+                            <li key={row.id ?? "none"}>
+                              <div className="flex justify-between gap-3 text-sm">
+                                <span>{row.name}</span>
+                                <span className="tabular shrink-0">
+                                  {formatBRL(row.amount)}{" "}
+                                  <span className="text-xs text-muted-foreground">
+                                    {pct(row.percent)}
+                                  </span>
+                                </span>
+                              </div>
+                              <div
+                                className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"
+                                aria-hidden="true"
+                              >
+                                <div
+                                  className={`h-full ${group.nature === "fixa" ? "bg-primary" : group.nature === "variavel" ? "bg-expense" : "bg-warning"}`}
+                                  style={{ width: `${row.percent ?? 0}%` }}
+                                />
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            )}
           </section>
 
           <section className="surface-card mt-4 overflow-hidden" aria-labelledby="daily-title">

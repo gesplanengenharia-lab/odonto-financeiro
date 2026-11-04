@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   dashboardDay,
+  dashboardIndicators,
+  dashboardCosts,
   dashboardMonth,
   dashboardFunding,
   type Txn,
@@ -289,5 +291,43 @@ describe("conferência diária", () => {
     expect(daily.missingPaidDates).toBe(1);
     expect(daily.byMethod.find((r) => r.method === "dinheiro")?.movement).toBe(-100);
     expect(dashboardDay([...rows, paid, expense], "2026-11-05").count).toBe(0);
+  });
+});
+
+
+describe("indicadores e composição de custos", () => {
+  const txn = (overrides: Partial<Txn> = {}) => ({ kind: "entrada", payment_method: "pix", status: "pago", paid_date: "2026-11-02", due_date: "2026-11-01", competence_date: "2026-11-01", gross_amount: 100, net_amount: 100, fee_amount: 0, nature: null, category_id: null, ...overrides }) as Txn;
+  it("compara os recebimentos líquidos, preservando prejuízo e despesas por competência", () => {
+    const cash = [txn(), txn({payment_method: "dinheiro", gross_amount: 50, net_amount: 50}), txn({payment_method: "credito", gross_amount: 60, net_amount: 50, fee_amount: 10}), txn({paid_date: "2026-10-30"})];
+    const comp = [txn(), txn({kind: "saida", nature: "fixa", gross_amount: 120}), txn({kind: "saida", nature: "variavel", gross_amount: 30})];
+    const m = dashboardIndicators(cash, comp, "2026-11", "2026-11-04");
+    expect(m.byMethod.find(r => r.method === "pix")?.receivedPct).toBe(50);
+    expect(m.byMethod.find(r => r.method === "dinheiro")?.receivedPct).toBe(25);
+    expect(m.byMethod.find(r => r.method === "credito")?.receivedPct).toBe(25);
+    expect(m.profitPct).toBe(-50);
+    expect(m.fixedPct).toBe(80);
+    expect(m.variablePct).toBe(20);
+  });
+  it("inadimplência usa a mesma base vencida no mês e exclui cartões e meses anteriores", () => {
+    const rows = [txn({status: "pendente"}), txn({gross_amount: 300}), txn({payment_method: "credito", status: "pendente", gross_amount: 900}), txn({status: "pendente", due_date: "2026-11-04"}), txn({status: "pendente", due_date: "2026-11-20"}), txn({status: "pendente", due_date: "2026-10-01"})];
+    const m = dashboardIndicators(rows, [], "2026-11", "2026-11-04");
+    expect(m.defaultedAmount).toBe(100);
+    expect(m.dueAmount).toBe(400);
+    expect(m.defaultPct).toBe(25);
+    expect(dashboardIndicators(rows, [], "2026-12", "2026-11-04").defaultPct).toBeNull();
+  });
+  it("não inventa percentuais para base vazia", () => {
+    const m = dashboardIndicators([], [], "2026-11");
+    expect([m.profitPct, m.fixedPct, m.variablePct, m.defaultPct]).toEqual([null,null,null,null]);
+    expect(m.byMethod.every(r => r.receivedPct === null)).toBe(true);
+  });
+  it("agrupa categorias pela natureza do lançamento e reconcilia todos os custos", () => {
+    const rows = [txn({kind:"saida",nature:"fixa",category_id:"a",gross_amount:100}),txn({kind:"saida",nature:"fixa",category_id:"a",gross_amount:50}),txn({kind:"saida",nature:"variavel",category_id:"a",gross_amount:30}),txn({kind:"saida",nature:null,gross_amount:20}),txn()];
+    const costs = dashboardCosts(rows,[{id:"a",name:"Serviços"}]);
+    expect(costs.map(g=>g.amount)).toEqual([150,30,20]);
+    expect(costs.map(g=>g.percent)).toEqual([75,15,10]);
+    expect(costs[0]!.rows[0]!).toMatchObject({name:"Serviços",amount:150,percent:75});
+    expect(costs[2]!.rows[0]!.name).toBe("Sem categoria");
+    expect(costs.reduce((sum,g)=>sum+g.amount,0)).toBe(summarize(rows).totalExpenses);
   });
 });

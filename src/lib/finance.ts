@@ -414,3 +414,48 @@ export function financialAssistantContext(
     ],
   };
 }
+
+/** Monthly ratios use explicit, matching cohorts. Null means no denominator.
+ * Default rate: outstanding non-card receivables / all non-card receivables
+ * due earlier than today within the selected month (including settled rows).
+ */
+export function dashboardIndicators(txns: Txn[], competence: Txn[], month: string, today = todayISO()) {
+  const cash = dashboardMonth(txns, month, today);
+  const summary = summarize(competence);
+  const share = (value: number, total: number) => total > 0 ? round2(value / total * 100) : null;
+  const { start, end } = monthRange(month);
+  const due = txns.filter(t => t.kind === "entrada" && t.payment_method !== "credito" && t.payment_method !== "debito"
+    && t.due_date >= start && t.due_date <= end && t.due_date < today);
+  const dueAmount = round2(due.reduce((sum, t) => sum + Number(t.gross_amount), 0));
+  const defaultedAmount = round2(due.filter(t => isDefaulted(t, today)).reduce((sum, t) => sum + Number(t.gross_amount), 0));
+  return {
+    byMethod: cash.byMethod.map(row => ({ method: row.method, receivedPct: share(row.received, cash.received) })),
+    profitPct: share(summary.profit, summary.grossRevenue),
+    fixedPct: share(summary.fixedExpenses, summary.totalExpenses),
+    variablePct: share(summary.variableExpenses, summary.totalExpenses),
+    defaultedAmount,
+    dueAmount,
+    defaultPct: share(defaultedAmount, dueAmount),
+  };
+}
+
+/** Expense categories retain each transaction's nature, including unclassified rows. */
+export function dashboardCosts(txns: Txn[], categories: { id: string; name: string }[]) {
+  const summary = summarize(txns);
+  const groups = [
+    { nature: "fixa", label: "Custos fixos" },
+    { nature: "variavel", label: "Custos variáveis" },
+    { nature: null, label: "Sem natureza definida" },
+  ] as const;
+  const percent = (value: number) => summary.totalExpenses > 0 ? round2(value / summary.totalExpenses * 100) : null;
+  return groups.map(group => {
+    const values = new Map<string | null, number>();
+    for (const txn of txns.filter(t => t.kind === "saida" && t.nature === group.nature)) {
+      values.set(txn.category_id, (values.get(txn.category_id) ?? 0) + Number(txn.gross_amount));
+    }
+    const amount = round2([...values.values()].reduce((sum, value) => sum + value, 0));
+    return { ...group, amount, percent: percent(amount), rows: [...values].map(([id, value]) => ({
+      id, name: categories.find(c => c.id === id)?.name ?? "Sem categoria", amount: round2(value), percent: percent(value),
+    })).sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name, "pt-BR")) };
+  });
+}

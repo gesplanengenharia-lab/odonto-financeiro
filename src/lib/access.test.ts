@@ -6,7 +6,7 @@ describe("permissões por função", () => {
   });
   it("membro nunca acessa gestão mesmo com módulo adulterado", () => {
     const member = { roles: ["membro"], modules: [...DEFAULT_MODULES, "painel", "relatorios", "assistente"], permissionsReady: true };
-    for (const module of ["painel", "relatorios", "assistente", "analytics", "configuracoes", "excluir"]) expect(canUse(member, module)).toBe(false);
+    for (const module of ["painel", "simulacao", "relatorios", "assistente", "analytics", "configuracoes", "excluir"]) expect(canUse(member, module)).toBe(false);
     expect(firstAllowedPath(member)).toBe("/lancamentos");
     expect(canUse(member, "baixar")).toBe(true);
   });
