@@ -13,6 +13,7 @@ import {
   LogOut,
   Menu,
   X,
+  Wallet,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { myAccessQuery } from "@/lib/queries";
@@ -68,7 +69,7 @@ export function AppShell() {
   const sidebar = (
     <nav className="flex h-full flex-col bg-sidebar px-3 py-5 text-sidebar-foreground">
       <div className="mb-8 flex items-center gap-2 px-3 font-display text-base font-semibold text-sidebar-accent-foreground">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">₢</span>
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground"><Wallet className="h-4 w-4" /></span>
         Financeiro
       </div>
       <ul className="flex flex-1 flex-col gap-1">
