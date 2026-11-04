@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { pageHead } from "@/lib/head";
 import { cardSettingsQuery, categoriesQuery, myAccessQuery } from "@/lib/queries";
 import type { CardSettings, Kind, Nature } from "@/lib/finance";
+import { MemberPermissions } from "@/components/finance/MemberPermissions";
 import { PageHeader } from "@/components/finance/ui";
 import { NativeSelect } from "@/components/finance/LaunchDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -157,15 +158,16 @@ function Team() {
   const { data: me } = useQuery(myAccessQuery());
   const isAdmin = me?.roles.includes("admin");
   const qc = useQueryClient();
-  const { data, refetch } = useQuery({
+  const { data, refetch, isError } = useQuery({
     queryKey: ["team"],
+    enabled: !!isAdmin && !!me?.permissionsReady,
     queryFn: async () => {
-      const [{ data: profiles, error }, { data: roles }] = await Promise.all([
+      const [{ data: profiles, error }, { data: roles, error: rolesError }] = await Promise.all([
         supabase.from("profiles").select("id,full_name,email,created_at").order("created_at"),
-        supabase.from("user_roles").select("user_id,role"),
+        supabase.from("user_roles").select("user_id,role,allowed_modules"),
       ]);
-      if (error) throw error;
-      return (profiles ?? []).map((p) => ({ ...p, roles: (roles ?? []).filter((r) => r.user_id === p.id).map((r) => r.role as string) }));
+      if (error || rolesError) throw error || rolesError;
+      return (profiles ?? []).map((p) => ({ ...p, modules: (roles ?? []).find((r) => r.user_id === p.id && r.role === "membro")?.allowed_modules ?? [], roles: (roles ?? []).filter((r) => r.user_id === p.id).map((r) => r.role as string) }));
     },
   });
 
@@ -189,6 +191,8 @@ function Team() {
       <p className="text-sm text-muted-foreground">
         Novos usuários criam a conta na tela de entrada e aparecem aqui como “Aguardando”. {isAdmin ? "Libere o acesso de quem faz parte da equipe." : "Só administradores podem liberar acessos."}
       </p>
+      {!me?.permissionsReady && <p role="alert" className="mt-4 text-sm text-warning">A migração de permissões ainda não foi aplicada ao banco. A liberação individual ficará disponível após a ativação.</p>}
+      {isError && <p role="alert" className="mt-4 text-sm text-expense">Não foi possível carregar a equipe. <button className="underline" onClick={() => void refetch()}>Tentar novamente</button></p>}
       <ul className="mt-4 divide-y divide-border">
         {(data ?? []).map((p) => {
           const status = p.roles.includes("admin") ? "Administrador" : p.roles.includes("membro") ? "Membro" : "Aguardando";
@@ -214,6 +218,7 @@ function Team() {
                   </>
                 )}
               </div>
+              {isAdmin && p.roles.includes("membro") && !p.roles.includes("admin") && <MemberPermissions userId={p.id} modules={p.modules} />}
             </li>
           );
         })}
@@ -221,3 +226,4 @@ function Team() {
     </div>
   );
 }
+

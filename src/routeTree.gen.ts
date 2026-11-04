@@ -13,6 +13,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
+import { Route as AuthenticatedAssistenteRouteImport } from './routes/_authenticated/assistente'
 import { Route as AuthenticatedCartoesRouteImport } from './routes/_authenticated/cartoes'
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedContasRouteImport } from './routes/_authenticated/contas'
@@ -40,6 +42,16 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedAnalyticsRoute = AuthenticatedAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedAssistenteRoute = AuthenticatedAssistenteRouteImport.update({
+  id: '/assistente',
+  path: '/assistente',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedCartoesRoute = AuthenticatedCartoesRouteImport.update({
   id: '/cartoes',
@@ -89,6 +101,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/analytics': typeof AuthenticatedAnalyticsRoute
+  '/assistente': typeof AuthenticatedAssistenteRoute
   '/cartoes': typeof AuthenticatedCartoesRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/contas': typeof AuthenticatedContasRoute
@@ -102,6 +116,8 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/analytics': typeof AuthenticatedAnalyticsRoute
+  '/assistente': typeof AuthenticatedAssistenteRoute
   '/cartoes': typeof AuthenticatedCartoesRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/contas': typeof AuthenticatedContasRoute
@@ -117,6 +133,8 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
+  '/_authenticated/assistente': typeof AuthenticatedAssistenteRoute
   '/_authenticated/cartoes': typeof AuthenticatedCartoesRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/_authenticated/contas': typeof AuthenticatedContasRoute
@@ -132,6 +150,8 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/reset-password'
+    | '/analytics'
+    | '/assistente'
     | '/cartoes'
     | '/configuracoes'
     | '/contas'
@@ -145,6 +165,8 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/reset-password'
+    | '/analytics'
+    | '/assistente'
     | '/cartoes'
     | '/configuracoes'
     | '/contas'
@@ -159,6 +181,8 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/reset-password'
+    | '/_authenticated/analytics'
+    | '/_authenticated/assistente'
     | '/_authenticated/cartoes'
     | '/_authenticated/configuracoes'
     | '/_authenticated/contas'
@@ -205,6 +229,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/analytics': {
+      id: '/_authenticated/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AuthenticatedAnalyticsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/assistente': {
+      id: '/_authenticated/assistente'
+      path: '/assistente'
+      fullPath: '/assistente'
+      preLoaderRoute: typeof AuthenticatedAssistenteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/cartoes': {
       id: '/_authenticated/cartoes'
@@ -266,6 +304,8 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
+  AuthenticatedAssistenteRoute: typeof AuthenticatedAssistenteRoute
   AuthenticatedCartoesRoute: typeof AuthenticatedCartoesRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
   AuthenticatedContasRoute: typeof AuthenticatedContasRoute
@@ -277,6 +317,8 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
+  AuthenticatedAssistenteRoute: AuthenticatedAssistenteRoute,
   AuthenticatedCartoesRoute: AuthenticatedCartoesRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
   AuthenticatedContasRoute: AuthenticatedContasRoute,

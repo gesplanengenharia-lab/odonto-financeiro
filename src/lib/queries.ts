@@ -1,3 +1,4 @@
+import { canUse } from "./access";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { CardSettings, NewTxnRow, Txn, Kind, Nature } from "./finance";
@@ -108,15 +109,23 @@ export const myAccessQuery = () =>
     queryFn: async () => {
       const { data: userData } = await supabase.auth.getUser();
       const user = userData.user;
-      if (!user) return { user: null, roles: [] as string[], name: "" };
-      const [{ data: roles }, { data: profile }] = await Promise.all([
-        supabase.from("user_roles").select("role").eq("user_id", user.id),
+      if (!user) return { user: null, roles: [] as string[], modules: [] as string[], permissionsReady: false, name: "" };
+      const [{ data: roles, error: roleError }, { data: profile, error: profileError }] = await Promise.all([
+        supabase.from("user_roles").select("role,allowed_modules").eq("user_id", user.id),
         supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
       ]);
+      if (profileError) throw profileError;
+      if (roleError) {
+        if (!roleError.message.includes("allowed_modules")) throw roleError;
+        // Rolling deployment: admins can apply the migration; members fail closed.
+        const fallback = await supabase.from("user_roles").select("role").eq("user_id", user.id);
+        if (fallback.error) throw fallback.error;
+        return { user, roles: (fallback.data ?? []).map((r) => r.role as string), modules: [] as string[], permissionsReady: false, name: profile?.full_name || user.email || "" };
+      }
       return {
-        user,
-        roles: (roles ?? []).map((r) => r.role as string),
-        name: profile?.full_name || user.email || "",
+        user, roles: (roles ?? []).map((r) => r.role as string),
+        modules: [...new Set((roles ?? []).flatMap((r) => r.allowed_modules ?? []))],
+        permissionsReady: true, name: profile?.full_name || user.email || "",
       };
     },
   });
@@ -124,9 +133,15 @@ export const myAccessQuery = () =>
 export function useTxnMutations() {
   const qc = useQueryClient();
   const invalidate = () => qc.invalidateQueries({ queryKey: ["txns"] });
+  const requirePermission = async (module: string) => {
+    const access = await qc.fetchQuery({ ...myAccessQuery(), staleTime: 0 });
+    if (!canUse(access, module)) throw new Error("Você não tem permissão para esta operação.");
+  };
 
   const create = useMutation({
     mutationFn: async (rows: NewTxnRow[]) => {
+      await requirePermission("lancamentos");
+      if (rows.some((r) => r.status === "pago")) await requirePermission("baixar");
       const { data: u } = await supabase.auth.getUser();
       const { error } = await supabase
         .from("transactions")
@@ -138,6 +153,7 @@ export function useTxnMutations() {
 
   const setPaid = useMutation({
     mutationFn: async ({ ids, paid, date }: { ids: string[]; paid: boolean; date?: string }) => {
+      await requirePermission("baixar");
       const { error } = await supabase
         .from("transactions")
         .update(paid ? { status: "pago", paid_date: date ?? new Date().toISOString().slice(0, 10) } : { status: "pendente", paid_date: null })
@@ -149,6 +165,7 @@ export function useTxnMutations() {
 
   const remove = useMutation({
     mutationFn: async ({ id, groupId }: { id: string; groupId?: string | null }) => {
+      await requirePermission("excluir");
       const q = supabase.from("transactions").delete();
       const { error } = groupId ? await q.eq("group_id", groupId) : await q.eq("id", id);
       if (error) throw error;
@@ -158,3 +175,40 @@ export function useTxnMutations() {
 
   return { create, setPaid, remove };
 }
+
+/** Aggregate usage source: metadata only, without patients or financial values. */
+export const usageQuery = () =>
+  queryOptions({
+    queryKey: ["txns", "usage"],
+    queryFn: async () => {
+      const [profiles, transactions] = await Promise.all([
+        (async () => {
+          const rows: { created_at: string }[] = [];
+          for (let page = 0; ; page++) {
+            const { data, error } = await supabase
+              .from("profiles")
+              .select("created_at")
+              .order("id")
+              .range(page * PAGE, (page + 1) * PAGE - 1);
+            if (error) throw error;
+            rows.push(...(data ?? []));
+            if (!data || data.length < PAGE) return rows;
+          }
+        })(),
+        (async () => {
+          const rows: import("./usage-analytics").UsageTransaction[] = [];
+          for (let page = 0; ; page++) {
+            const { data, error } = await supabase
+              .from("transactions")
+              .select("created_at,created_by,status,paid_date,kind")
+              .order("id")
+              .range(page * PAGE, (page + 1) * PAGE - 1);
+            if (error) throw error;
+            rows.push(...(data ?? []));
+            if (!data || data.length < PAGE) return rows;
+          }
+        })(),
+      ]);
+      return { profiles, transactions };
+    },
+  });

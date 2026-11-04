@@ -18,7 +18,8 @@ import {
   type Nature,
   type PaymentMethod,
 } from "@/lib/finance";
-import { cardSettingsQuery, categoriesQuery, useTxnMutations } from "@/lib/queries";
+import { canUse } from "@/lib/access";
+import { cardSettingsQuery, categoriesQuery, myAccessQuery, useTxnMutations } from "@/lib/queries";
 
 export function NativeSelect({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { children: ReactNode }) {
   return (
@@ -36,6 +37,8 @@ export function NativeSelect({ className, children, ...props }: SelectHTMLAttrib
 
 export function LaunchDialog({ defaultKind = "entrada", trigger }: { defaultKind?: Kind; trigger?: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const { data: access } = useQuery(myAccessQuery());
+  if (!canUse(access, "lancamentos")) return null;
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger ?? <Button>Novo lançamento</Button>}</DialogTrigger>
@@ -53,6 +56,8 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
   const { data: categories = [] } = useQuery(categoriesQuery());
   const { data: settings } = useQuery(cardSettingsQuery());
   const { create } = useTxnMutations();
+  const { data: access } = useQuery(myAccessQuery());
+  const canSettle = canUse(access, "baixar");
 
   const [kind, setKind] = useState<Kind>(defaultKind);
   const [description, setDescription] = useState("");
@@ -87,13 +92,13 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
         first_due_date: firstDue,
         installments,
         repeat_months: repeat,
-        paid,
+        paid: paid && canSettle,
         notes,
       },
       settings,
       () => crypto.randomUUID(),
     );
-  }, [settings, value, kind, description, person, categoryId, nature, method, date, firstDue, installments, repeat, paid, notes]);
+  }, [settings, value, kind, description, person, categoryId, nature, method, date, firstDue, installments, repeat, paid, notes, canSettle]);
 
   const totalFee = rows.reduce((s, r) => s + r.fee_amount, 0);
   const totalNet = rows.reduce((s, r) => s + r.net_amount, 0);
@@ -223,7 +228,7 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
         </div>
         {!isCard && (
           <label className="flex items-center gap-2 self-end pb-2 text-sm">
-            <input type="checkbox" className="h-4 w-4 accent-primary" checked={paid} onChange={(e) => setPaid(e.target.checked)} />
+            <input type="checkbox" className="h-4 w-4 accent-primary" disabled={!canSettle} checked={paid && canSettle} onChange={(e) => setPaid(e.target.checked)} />
             {installments > 1 || repeat > 1 ? "1ª parcela já foi paga" : "Já foi pago"}
           </label>
         )}
@@ -272,3 +277,4 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
     </form>
   );
 }
+

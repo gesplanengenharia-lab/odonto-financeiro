@@ -1,5 +1,5 @@
 export function pageHead(title: string, description: string) {
-  const full = `${title} — Financeiro da Clínica`;
+  const full = `${title} — Essencial Odontologia`;
   return {
     meta: [
       { title: full },
@@ -11,3 +11,4 @@ export function pageHead(title: string, description: string) {
     ],
   };
 }
+

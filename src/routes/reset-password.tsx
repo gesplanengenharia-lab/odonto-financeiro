@@ -9,9 +9,9 @@ import { Label } from "@/components/ui/label";
 export const Route = createFileRoute("/reset-password")({
   head: () => ({
     meta: [
-      { title: "Nova senha — Financeiro da Clínica" },
+      { title: "Nova senha — Essencial Odontologia" },
       { name: "description", content: "Defina uma nova senha de acesso." },
-      { property: "og:title", content: "Nova senha — Financeiro da Clínica" },
+      { property: "og:title", content: "Nova senha — Essencial Odontologia" },
       { property: "og:description", content: "Defina uma nova senha de acesso ao sistema." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -48,3 +48,4 @@ function ResetPassword() {
     </div>
   );
 }
+

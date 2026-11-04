@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from "recharts";
+import { canUse } from "@/lib/access";
+import { myAccessQuery } from "@/lib/queries";
 import { pageHead } from "@/lib/head";
 import { addMonths, formatBRL, formatMonth, monthKey, monthRange, nextMonths, todayISO } from "@/lib/finance";
 import { txnsByDueQuery, useTxnMutations } from "@/lib/queries";
@@ -23,6 +25,7 @@ function Cartoes() {
   const to = monthRange(monthKey(addMonths(`${current}-01`, 12))).end;
   const { data = [], isLoading } = useQuery(txnsByDueQuery(from, to));
   const { setPaid } = useTxnMutations();
+  const { data: access } = useQuery(myAccessQuery());
 
   const cards = data.filter((t) => t.kind === "entrada" && (t.payment_method === "credito" || t.payment_method === "debito"));
   const pending = cards.filter((t) => t.status === "pendente");
@@ -63,7 +66,7 @@ function Cartoes() {
         subtitle="Quanto entrou e quanto ainda vai cair na conta, já descontada a taxa da maquininha"
         actions={
           due.length > 0 && (
-            <Button onClick={confirmDue} disabled={setPaid.isPending}>
+            <Button onClick={confirmDue} disabled={setPaid.isPending || !canUse(access, "baixar")}>
               Confirmar {due.length} recebimento(s) até hoje
             </Button>
           )
@@ -108,3 +111,4 @@ function Cartoes() {
     </div>
   );
 }
+

@@ -3,12 +3,14 @@ import { toast } from "sonner";
 import { Check, Trash2, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDate, PAYMENT_LABELS, type Txn } from "@/lib/finance";
-import { categoriesQuery, useTxnMutations } from "@/lib/queries";
+import { canUse } from "@/lib/access";
+import { categoriesQuery, myAccessQuery, useTxnMutations } from "@/lib/queries";
 import { KindBadge, Money, StatusBadge } from "./ui";
 
 export function TxnTable({ rows, showFee = false, dateField = "due_date" }: { rows: Txn[]; showFee?: boolean; dateField?: "due_date" | "competence_date" }) {
   const { data: categories = [] } = useQuery(categoriesQuery());
   const catName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? "—";
+  const { data: access } = useQuery(myAccessQuery());
   const { setPaid, remove } = useTxnMutations();
 
   async function toggle(t: Txn) {
@@ -79,7 +81,7 @@ export function TxnTable({ rows, showFee = false, dateField = "due_date" }: { ro
                 <Money value={t.kind === "entrada" ? t.net_amount : t.gross_amount} kind={t.kind} />
               </td>
               <td className="whitespace-nowrap px-2 py-3 text-right">
-                <Button
+                {canUse(access, "baixar") && <Button
                   variant="ghost"
                   size="icon"
                   aria-label={t.status === "pago" ? "Desfazer baixa" : "Dar baixa"}
@@ -87,10 +89,10 @@ export function TxnTable({ rows, showFee = false, dateField = "due_date" }: { ro
                   onClick={() => toggle(t)}
                 >
                   {t.status === "pago" ? <Undo2 /> : <Check className="text-income" />}
-                </Button>
-                <Button variant="ghost" size="icon" aria-label="Excluir" title="Excluir" onClick={() => del(t)}>
+                </Button>}
+                {canUse(access, "excluir") && <Button variant="ghost" size="icon" aria-label="Excluir" title="Excluir" onClick={() => del(t)}>
                   <Trash2 className="text-muted-foreground" />
-                </Button>
+                </Button>}
               </td>
             </tr>
           ))}
@@ -99,3 +101,4 @@ export function TxnTable({ rows, showFee = false, dateField = "due_date" }: { ro
     </div>
   );
 }
+

@@ -11,9 +11,9 @@ import { Label } from "@/components/ui/label";
 export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
-      { title: "Entrar — Financeiro da Clínica" },
+      { title: "Entrar — Essencial Odontologia" },
       { name: "description", content: "Acesse o sistema financeiro da clínica com seu e-mail ou conta Google." },
-      { property: "og:title", content: "Entrar — Financeiro da Clínica" },
+      { property: "og:title", content: "Entrar — Essencial Odontologia" },
       { property: "og:description", content: "Acesso da equipe ao sistema financeiro da clínica." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -82,7 +82,7 @@ function AuthPage() {
     <div className="grid min-h-screen lg:grid-cols-2">
       <div className="surface-ink hidden rounded-none p-12 lg:flex lg:flex-col lg:justify-between">
         <Link to="/" className="font-display text-lg font-semibold">
-          Financeiro da Clínica
+          Essencial Odontologia
         </Link>
         <div>
           <h2 className="max-w-md text-3xl font-semibold leading-tight">Cada parcela, cada boleto, cada taxa no lugar certo.</h2>
@@ -167,3 +167,4 @@ function AuthPage() {
     </div>
   );
 }
+

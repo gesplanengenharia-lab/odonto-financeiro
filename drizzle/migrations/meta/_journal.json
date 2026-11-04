@@ -8,6 +8,13 @@
       "when": 1793826665218,
       "tag": "0000_financeiro_clinica",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793826665219,
+      "tag": "0001_team_module_permissions",
+      "breakpoints": true
     }
   ]
 }

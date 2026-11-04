@@ -7,12 +7,12 @@ import { Button } from "@/components/ui/button";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Financeiro da Clínica — controle de entradas, saídas e cartões" },
+      { title: "Essencial Odontologia — controle de entradas, saídas e cartões" },
       {
         name: "description",
         content: "Sistema financeiro para clínica odontológica: entradas, saídas, cartões parcelados, boletos, Pix, provisão e inadimplência.",
       },
-      { property: "og:title", content: "Financeiro da Clínica" },
+      { property: "og:title", content: "Essencial Odontologia" },
       { property: "og:description", content: "Entradas, saídas, cartões, boletos, provisão e margem de lucro da sua clínica em um só lugar." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -41,7 +41,7 @@ function Index() {
       <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
         <div className="flex items-center gap-2 font-display text-lg font-semibold">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground"><Wallet className="h-4 w-4" /></span>
-          Financeiro da Clínica
+          Essencial Odontologia
         </div>
         <Button asChild variant="outline">
           <Link to="/auth">Entrar</Link>
@@ -79,3 +79,4 @@ function Index() {
     </div>
   );
 }
+

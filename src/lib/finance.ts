@@ -359,3 +359,58 @@ export function dashboardDay(txns: Txn[], day: string) {
     missingPaidDates: txns.filter((t) => t.status === "pago" && !t.paid_date).length,
   };
 }
+
+/** Only aggregate finance data crosses the AI gateway boundary. */
+export function financialAssistantContext(
+  txns: Txn[],
+  categories: { id: string; name: string }[],
+  fromMonth: string,
+  toMonth: string,
+  today = todayISO(),
+) {
+  const count =
+    (Number(toMonth.slice(0, 4)) - Number(fromMonth.slice(0, 4))) * 12 +
+    Number(toMonth.slice(5)) -
+    Number(fromMonth.slice(5)) +
+    1;
+  const { start } = monthRange(fromMonth);
+  const { end } = monthRange(toMonth);
+  const competence = txns.filter((t) => t.competence_date >= start && t.competence_date <= end);
+  const ids = [...new Set(competence.map((t) => t.category_id))];
+  return {
+    moeda: "BRL",
+    hoje: today,
+    periodo: { inicio: start, fim: end },
+    dre_competencia: summarize(competence),
+    categorias_competencia: ids.map((id) => ({
+      categoria: categories.find((c) => c.id === id)?.name ?? "Sem categoria",
+      resumo: summarize(competence.filter((t) => t.category_id === id)),
+    })),
+    meses: nextMonths(fromMonth, count).map((month) => {
+      const m = dashboardMonth(txns, month, today);
+      return {
+        mes: month,
+        recebido_liquido: m.received,
+        pago: m.paid,
+        a_receber_a_vencer: m.toReceive,
+        a_receber_atrasado: m.overdueReceivable,
+        a_pagar_pendente: m.toPay,
+        despesas_anteriores_pendentes: m.priorToPay,
+        recebiveis_anteriores_pendentes: m.priorToReceive,
+        movimento_realizado: m.realized,
+        movimento_projetado_sem_saldo_inicial: m.projected,
+        formas_de_recebimento: m.byMethod,
+        pagos_sem_data: m.missingPaidDates,
+        dre: summarize(txns.filter((t) => monthKey(t.competence_date) === month)),
+      };
+    }),
+    limites: [
+      "Dados representam o status atual; não são snapshots históricos.",
+      "Projeção exclui recebíveis atrasados e inclui despesas anteriores ainda pendentes. Não some saldos projetados de meses diferentes: despesas anteriores podem se repetir.",
+      "Saldo bancário inicial não está disponível; não afirme aporte necessário ou saldo bancário.",
+      "Taxas já descontadas dos recebimentos líquidos. Pendentes não são caixa realizado.",
+      "Cadastro não separa aportes, retiradas e investimentos da operação.",
+      "Pagos sem data usam vencimento como referência mensal.",
+    ],
+  };
+}

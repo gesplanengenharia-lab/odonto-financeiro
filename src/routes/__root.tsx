@@ -74,7 +74,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Financeiro da Clínica" },
+      { title: "Essencial Odontologia" },
       { name: "description", content: "Controle financeiro para clínica odontológica." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -130,3 +130,4 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
+

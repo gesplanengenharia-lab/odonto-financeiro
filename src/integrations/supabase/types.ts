@@ -171,16 +171,19 @@ export type Database = {
       }
       user_roles: {
         Row: {
+          allowed_modules: string[]
           id: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
+          allowed_modules?: string[]
           id?: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
+          allowed_modules?: string[]
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
@@ -334,3 +337,4 @@ export const Constants = {
     },
   },
 } as const
+

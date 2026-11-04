@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { canUse } from "@/lib/access";
+import { myAccessQuery } from "@/lib/queries";
 import { pageHead } from "@/lib/head";
 import { daysLate, formatBRL, formatDate, isDefaulted, PAYMENT_LABELS, type Txn } from "@/lib/finance";
 import { pendingQuery, useTxnMutations } from "@/lib/queries";
@@ -16,6 +18,7 @@ export const Route = createFileRoute("/_authenticated/inadimplentes")({
 function Inadimplentes() {
   const { data = [], isLoading } = useQuery(pendingQuery());
   const { setPaid } = useTxnMutations();
+  const { data: access } = useQuery(myAccessQuery());
   const late = data.filter((t) => isDefaulted(t));
 
   const groups = useMemo(() => {
@@ -85,7 +88,7 @@ function Inadimplentes() {
                         venceu {formatDate(t.due_date)} ({daysLate(t.due_date)}d)
                       </span>
                       <span className="tabular font-semibold">{formatBRL(t.gross_amount)}</span>
-                      <Button size="sm" variant="outline" onClick={() => pay(t)}>
+                      <Button size="sm" variant="outline" disabled={!canUse(access, "baixar")} onClick={() => pay(t)}>
                         Recebido
                       </Button>
                     </span>
@@ -99,3 +102,4 @@ function Inadimplentes() {
     </div>
   );
 }
+
