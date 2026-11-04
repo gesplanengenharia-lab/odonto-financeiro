@@ -13,9 +13,12 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as AuthenticatedCartoesRouteImport } from './routes/_authenticated/cartoes'
 import { Route as AuthenticatedContasRouteImport } from './routes/_authenticated/contas'
+import { Route as AuthenticatedInadimplentesRouteImport } from './routes/_authenticated/inadimplentes'
 import { Route as AuthenticatedLancamentosRouteImport } from './routes/_authenticated/lancamentos'
 import { Route as AuthenticatedPainelRouteImport } from './routes/_authenticated/painel'
+import { Route as AuthenticatedProvisaoRouteImport } from './routes/_authenticated/provisao'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -36,11 +39,22 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedCartoesRoute = AuthenticatedCartoesRouteImport.update({
+  id: '/cartoes',
+  path: '/cartoes',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedContasRoute = AuthenticatedContasRouteImport.update({
   id: '/contas',
   path: '/contas',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedInadimplentesRoute =
+  AuthenticatedInadimplentesRouteImport.update({
+    id: '/inadimplentes',
+    path: '/inadimplentes',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedLancamentosRoute =
   AuthenticatedLancamentosRouteImport.update({
     id: '/lancamentos',
@@ -52,22 +66,33 @@ const AuthenticatedPainelRoute = AuthenticatedPainelRouteImport.update({
   path: '/painel',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedProvisaoRoute = AuthenticatedProvisaoRouteImport.update({
+  id: '/provisao',
+  path: '/provisao',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/cartoes': typeof AuthenticatedCartoesRoute
   '/contas': typeof AuthenticatedContasRoute
+  '/inadimplentes': typeof AuthenticatedInadimplentesRoute
   '/lancamentos': typeof AuthenticatedLancamentosRoute
   '/painel': typeof AuthenticatedPainelRoute
+  '/provisao': typeof AuthenticatedProvisaoRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/cartoes': typeof AuthenticatedCartoesRoute
   '/contas': typeof AuthenticatedContasRoute
+  '/inadimplentes': typeof AuthenticatedInadimplentesRoute
   '/lancamentos': typeof AuthenticatedLancamentosRoute
   '/painel': typeof AuthenticatedPainelRoute
+  '/provisao': typeof AuthenticatedProvisaoRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -75,25 +100,48 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/_authenticated/cartoes': typeof AuthenticatedCartoesRoute
   '/_authenticated/contas': typeof AuthenticatedContasRoute
+  '/_authenticated/inadimplentes': typeof AuthenticatedInadimplentesRoute
   '/_authenticated/lancamentos': typeof AuthenticatedLancamentosRoute
   '/_authenticated/painel': typeof AuthenticatedPainelRoute
+  '/_authenticated/provisao': typeof AuthenticatedProvisaoRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/auth' | '/reset-password' | '/contas' | '/lancamentos' | '/painel'
+    | '/'
+    | '/auth'
+    | '/reset-password'
+    | '/cartoes'
+    | '/contas'
+    | '/inadimplentes'
+    | '/lancamentos'
+    | '/painel'
+    | '/provisao'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/reset-password' | '/contas' | '/lancamentos' | '/painel'
+  to:
+    | '/'
+    | '/auth'
+    | '/reset-password'
+    | '/cartoes'
+    | '/contas'
+    | '/inadimplentes'
+    | '/lancamentos'
+    | '/painel'
+    | '/provisao'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
     | '/reset-password'
+    | '/_authenticated/cartoes'
     | '/_authenticated/contas'
+    | '/_authenticated/inadimplentes'
     | '/_authenticated/lancamentos'
     | '/_authenticated/painel'
+    | '/_authenticated/provisao'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -133,11 +181,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/cartoes': {
+      id: '/_authenticated/cartoes'
+      path: '/cartoes'
+      fullPath: '/cartoes'
+      preLoaderRoute: typeof AuthenticatedCartoesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/contas': {
       id: '/_authenticated/contas'
       path: '/contas'
       fullPath: '/contas'
       preLoaderRoute: typeof AuthenticatedContasRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/inadimplentes': {
+      id: '/_authenticated/inadimplentes'
+      path: '/inadimplentes'
+      fullPath: '/inadimplentes'
+      preLoaderRoute: typeof AuthenticatedInadimplentesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/lancamentos': {
@@ -154,19 +216,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPainelRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/provisao': {
+      id: '/_authenticated/provisao'
+      path: '/provisao'
+      fullPath: '/provisao'
+      preLoaderRoute: typeof AuthenticatedProvisaoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedCartoesRoute: typeof AuthenticatedCartoesRoute
   AuthenticatedContasRoute: typeof AuthenticatedContasRoute
+  AuthenticatedInadimplentesRoute: typeof AuthenticatedInadimplentesRoute
   AuthenticatedLancamentosRoute: typeof AuthenticatedLancamentosRoute
   AuthenticatedPainelRoute: typeof AuthenticatedPainelRoute
+  AuthenticatedProvisaoRoute: typeof AuthenticatedProvisaoRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedCartoesRoute: AuthenticatedCartoesRoute,
   AuthenticatedContasRoute: AuthenticatedContasRoute,
+  AuthenticatedInadimplentesRoute: AuthenticatedInadimplentesRoute,
   AuthenticatedLancamentosRoute: AuthenticatedLancamentosRoute,
   AuthenticatedPainelRoute: AuthenticatedPainelRoute,
+  AuthenticatedProvisaoRoute: AuthenticatedProvisaoRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

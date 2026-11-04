@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { pageHead } from "@/lib/head";
-import { addMonths, cashValue, formatBRL, formatMonth, monthKey, monthRange, nextMonths, todayISO } from "@/lib/finance";
+import { cashValue, formatBRL, formatMonth, monthKey, monthRange, nextMonths, todayISO } from "@/lib/finance";
 import { txnsByDueQuery } from "@/lib/queries";
 import { PageHeader, StatCard } from "@/components/finance/ui";
 import { NativeSelect } from "@/components/finance/LaunchDialog";
@@ -118,7 +118,7 @@ function Provisao() {
         </table>
       </div>
       <p className="mt-3 text-xs text-muted-foreground">
-        Dica: cadastre despesas fixas (aluguel, salários) com “Repetir todo mês” para que apareçam aqui. Atrasados do mês {formatMonth(monthKey(addMonths(`${current}-01`, 0)))} não pagos também entram.
+        Dica: cadastre despesas fixas (aluguel, salários) com “Repetir todo mês” para que apareçam aqui. Contas atrasadas de meses anteriores ficam em Contas a pagar e receber.
       </p>
     </div>
   );
