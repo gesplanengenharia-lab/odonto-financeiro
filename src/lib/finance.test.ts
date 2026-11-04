@@ -38,18 +38,14 @@ describe("lançamento parcelado no crédito", () => {
     );
     expect(rows.map((r) => r.gross_amount)).toEqual([333.33, 333.33, 333.34]);
     expect(rows.map((r) => r.due_date)).toEqual(["2026-12-04", "2027-01-03", "2027-02-02"]);
-    expect(rows[0].fee_amount).toBe(15); // 4.5% de 333.33
-    expect(rows[0].net_amount).toBe(318.33);
+    expect(rows[0]!.fee_amount).toBe(15); // 4.5% de 333.33
+    expect(rows[0]!.net_amount).toBe(318.33);
     expect(rows.every((r) => r.status === "pendente")).toBe(true);
     expect(rows.every((r) => r.competence_date === "2026-11-04")).toBe(true);
   });
 
   it("débito cai no dia seguinte com taxa de 1,5%", () => {
-    const row = buildLaunchRows(
-      { kind: "entrada", description: "Consulta", payment_method: "debito", amount: 200, date: "2026-11-04", installments: 5 },
-      settings,
-      gid,
-    );
+    !;
     expect(row.due_date).toBe("2026-11-05");
     expect(row.fee_amount).toBe(3);
     expect(row.installment_total).toBe(1);
@@ -74,16 +70,12 @@ describe("boletos e despesas fixas", () => {
       gid,
     );
     expect(rows).toHaveLength(12);
-    expect(rows[11].due_date).toBe("2027-10-05");
+    expect(rows[11]!.due_date).toBe("2027-10-05");
     expect(rows.every((r) => r.nature === "fixa" && r.gross_amount === 4500)).toBe(true);
   });
 
   it("pix pago à vista entra como pago", () => {
-    const row = buildLaunchRows(
-      { kind: "entrada", description: "Limpeza", payment_method: "pix", amount: 150, date: "2026-11-04", installments: 1, paid: true },
-      settings,
-      gid,
-    );
+    !;
     expect(row.status).toBe("pago");
     expect(row.paid_date).toBe("2026-11-04");
   });
