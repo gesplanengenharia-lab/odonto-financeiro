@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { readPayroll } from "@/lib/payroll";
 import { pageHead } from "@/lib/head";
 import { cashValue, monthKey, monthRange, PAYMENT_LABELS, todayISO, type PaymentMethod } from "@/lib/finance";
 import { txnsByCompetenceQuery } from "@/lib/queries";
@@ -24,6 +25,7 @@ function Lancamentos() {
 
   const rows = data.filter(
     (t) =>
+      !readPayroll(t) &&
       (!kind || t.kind === kind) &&
       (!method || t.payment_method === method) &&
       (!search || `${t.description} ${t.person ?? ""}`.toLowerCase().includes(search.toLowerCase())),
@@ -43,6 +45,7 @@ function Lancamentos() {
           </>
         }
       />
+      <p className="mb-4 text-xs text-muted-foreground">Remunerações são geridas em Colaboradores e já integram o DRE geral. Os totais abaixo consideram somente os lançamentos desta lista.</p>
       <div className="mb-4 grid gap-4 sm:grid-cols-3">
         <StatCard label="Entradas (bruto)" value={ent} tone="income" />
         <StatCard label="Saídas" value={sai} tone="expense" />
@@ -74,3 +77,4 @@ function Lancamentos() {
     </div>
   );
 }
+
