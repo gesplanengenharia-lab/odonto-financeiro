@@ -459,3 +459,24 @@ export function dashboardCosts(txns: Txn[], categories: { id: string; name: stri
     })).sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name, "pt-BR")) };
   });
 }
+
+export interface PayrollAmounts {
+  termination?: number;
+  vacation?: number;
+  base: number;
+  additional: number;
+  commission: number;
+  bonus: number;
+  discount: number;
+}
+
+/** Monthly remuneration in integer cents. Discounts cannot create a negative payment. */
+export function payrollTotal(values: PayrollAmounts) {
+  const amounts = Object.values(values);
+  if (amounts.some(value => !Number.isFinite(value) || value < 0 || value > 999999999))
+    throw new Error("Informe valores positivos válidos, com até duas casas decimais.");
+  const cents = (value: number) => Math.round(value * 100);
+  const total = cents(values.base) + cents(values.additional) + cents(values.commission) + cents(values.bonus) + cents(values.termination ?? 0) + cents(values.vacation ?? 0) - cents(values.discount);
+  if (total < 0) throw new Error("Os descontos não podem superar a remuneração do mês.");
+  return total / 100;
+}
