@@ -15,6 +15,7 @@ import { pageHead } from "@/lib/head";
 import {
   addMonths,
   cashValue,
+  dashboardDay,
   dashboardFunding,
   dashboardMonth,
   formatBRL,
@@ -52,6 +53,8 @@ export const Route = createFileRoute("/_authenticated/painel")({
 function Painel() {
   const today = todayISO();
   const [month, setMonth] = useState(monthKey(today));
+  const [selectedDay, setSelectedDay] = useState(today);
+  const day = monthKey(selectedDay) === month ? selectedDay : `${month}-01`;
   const [openings, setOpenings] = useState<Record<string, string>>({});
   const { start, end } = monthRange(month);
   // All dates are required: an old installment may have been settled this month.
@@ -60,6 +63,7 @@ function Painel() {
   const cash = useMemo(() => cashQuery.data ?? [], [cashQuery.data]);
   const comp = compQuery.data ?? [];
   const m = useMemo(() => dashboardMonth(cash, month, today), [cash, month, today]);
+  const daily = useMemo(() => dashboardDay(cash, day), [cash, day]);
   const s = summarize(comp);
   const pending = cash.filter((t) => t.status === "pendente");
   const defaulted = pending.filter((t) => isDefaulted(t, today));
@@ -281,6 +285,108 @@ function Painel() {
               * Recebido pela data de pagamento + pendentes pelo vencimento. O total inclui
               atrasados; a projeção de fechamento não.
             </p>
+          </section>
+
+          <section className="surface-card mt-4 overflow-hidden" aria-labelledby="daily-title">
+            <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 id="daily-title" className="text-base font-semibold">
+                  Fechamento diário — conferência
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Confira os lançamentos pagos com o extrato, os comprovantes e o dinheiro do dia.
+                </p>
+              </div>
+              <div className="shrink-0">
+                <Label htmlFor="closing-day">Dia da conferência</Label>
+                <Input
+                  id="closing-day"
+                  className="mt-2 w-44"
+                  type="date"
+                  value={day}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setSelectedDay(e.target.value);
+                      setMonth(monthKey(e.target.value));
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            <div className="grid gap-3 px-5 pb-5 sm:grid-cols-3">
+              <StatCard
+                label="Entrou no dia"
+                value={daily.received}
+                tone="income"
+                hint="Recebimentos líquidos confirmados"
+              />
+              <StatCard
+                label="Saiu no dia"
+                value={daily.paid}
+                tone="expense"
+                hint="Pagamentos confirmados"
+              />
+              <StatCard
+                label="Movimento líquido do dia"
+                value={daily.movement}
+                tone={daily.movement >= 0 ? "income" : "expense"}
+                hint="Entradas − saídas; não é o saldo bancário"
+              />
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px] text-sm">
+                <caption className="sr-only">Conferência de {formatDate(day)}</caption>
+                <thead className="bg-muted/40 text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-5 py-3 text-left">Forma de pagamento</th>
+                    <th className="px-5 py-3 text-right">Entradas</th>
+                    <th className="px-5 py-3 text-right">Saídas</th>
+                    <th className="px-5 py-3 text-right">Movimento líquido</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {daily.byMethod.map((r) => (
+                    <tr key={r.method} className="border-t border-border">
+                      <th scope="row" className="px-5 py-3 text-left font-medium">
+                        {PAYMENT_LABELS[r.method]}
+                      </th>
+                      <td className="tabular px-5 py-3 text-right text-income">
+                        {formatBRL(r.received)}
+                      </td>
+                      <td className="tabular px-5 py-3 text-right text-expense">
+                        {formatBRL(r.paid)}
+                      </td>
+                      <td className="tabular px-5 py-3 text-right font-semibold">
+                        {formatBRL(r.movement)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="space-y-2 border-t border-border px-5 py-4 text-xs text-muted-foreground">
+              <p>
+                {daily.count
+                  ? `${daily.count} lançamento(s) com pagamento confirmado em ${formatDate(day)}.`
+                  : `Nenhum pagamento confirmado em ${formatDate(day)}.`}
+              </p>
+              <p>
+                Vendas no cartão atribuídas a este dia:{" "}
+                <strong>{formatBRL(daily.cardSales)}</strong> (bruto). Venda e recebimento são
+                momentos diferentes: no caixa acima entram apenas os cartões marcados como recebidos
+                nesta data, já líquidos de taxas.
+              </p>
+              <p>
+                Conferência calculada com os lançamentos atuais; não registra aprovação, não
+                bloqueia alterações e não faz conciliação bancária automática.
+              </p>
+              {daily.missingPaidDates > 0 && (
+                <p className="text-warning">
+                  {daily.missingPaidDates} lançamento(s) pago(s), em todo o cadastro, não têm data
+                  de pagamento e não entram na conferência diária.
+                </p>
+              )}
+            </div>
           </section>
 
           <div className="mt-4 grid gap-4 xl:grid-cols-2">

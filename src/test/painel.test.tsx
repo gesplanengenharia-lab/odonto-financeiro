@@ -86,6 +86,18 @@ describe("Painel", () => {
       "true",
     );
   });
+  it("mantém a conferência diária alinhada ao mês e permite escolher outra data", () => {
+    render(<Panel />);
+    expect(screen.getByLabelText("Dia da conferência")).toHaveValue("2026-11-04");
+    fireEvent.click(screen.getByRole("button", { name: "Próximo mês" }));
+    expect(screen.getByLabelText("Dia da conferência")).toHaveValue("2026-12-01");
+    fireEvent.change(screen.getByLabelText("Dia da conferência"), {
+      target: { value: "2027-01-08" },
+    });
+    expect(screen.getByLabelText("Dia da conferência")).toHaveValue("2027-01-08");
+    expect(screen.getByText("Janeiro de 2027")).toBeInTheDocument();
+    expect(screen.getByText("Nenhum pagamento confirmado em 08/01/2027.")).toBeInTheDocument();
+  });
   it("não exibe saldos zerados enquanto carrega", () => {
     state.pending = true;
     render(<Panel />);

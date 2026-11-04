@@ -327,3 +327,35 @@ export function dashboardFunding(projected: number, opening: number) {
   const closing = round2(opening + projected);
   return { closing, contribution: round2(Math.max(0, -closing)) };
 }
+
+/** Daily reconciliation only includes confirmed payment dates; never infer a day. */
+export function dashboardDay(txns: Txn[], day: string) {
+  const settled = txns.filter((t) => t.status === "pago" && t.paid_date === day);
+  const total = (rows: Txn[], kind: Kind) =>
+    round2(rows.filter((t) => t.kind === kind).reduce((sum, t) => sum + cashValue(t), 0));
+  const received = total(settled, "entrada");
+  const paid = total(settled, "saida");
+  const byMethod = (Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((method) => {
+    const rows = settled.filter((t) => t.payment_method === method);
+    const received = total(rows, "entrada");
+    const paid = total(rows, "saida");
+    return { method, received, paid, movement: round2(received - paid) };
+  });
+  const cardSales = summarize(
+    txns.filter(
+      (t) =>
+        t.kind === "entrada" &&
+        t.competence_date === day &&
+        (t.payment_method === "credito" || t.payment_method === "debito"),
+    ),
+  ).grossRevenue;
+  return {
+    received,
+    paid,
+    movement: round2(received - paid),
+    byMethod,
+    cardSales,
+    count: settled.length,
+    missingPaidDates: txns.filter((t) => t.status === "pago" && !t.paid_date).length,
+  };
+}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  dashboardDay,
   dashboardMonth,
   dashboardFunding,
   type Txn,
@@ -245,5 +246,48 @@ describe("dashboard mensal", () => {
     expect(m.projected).toBe(0);
     expect(m.byMethod).toHaveLength(6);
     expect(m.cashDre.margin).toBe(0);
+  });
+});
+
+describe("conferência diária", () => {
+  it("separa venda no cartão de recebimento líquido e não presume datas ausentes", () => {
+    const rows = buildLaunchRows(
+      {
+        kind: "entrada",
+        description: "Cartão",
+        payment_method: "credito",
+        amount: 1000,
+        date: "2026-11-04",
+        installments: 2,
+      },
+      settings,
+      gid,
+    ).map((t, i) => ({ ...t, id: `card-${i}` }));
+    const paid = {
+      ...rows[0]!,
+      id: "paid",
+      competence_date: "2026-10-01",
+      status: "pago" as const,
+      paid_date: "2026-11-04",
+    };
+    const expense = {
+      ...paid,
+      id: "expense",
+      kind: "saida" as const,
+      payment_method: "dinheiro" as const,
+      gross_amount: 100,
+      net_amount: 100,
+      fee_amount: 0,
+    };
+    const missing = { ...paid, id: "missing", paid_date: null, due_date: "2026-11-04" };
+    const daily = dashboardDay([...rows, paid, expense, missing], "2026-11-04");
+    expect(daily.cardSales).toBe(1000);
+    expect(daily.received).toBe(477.5);
+    expect(daily.paid).toBe(100);
+    expect(daily.movement).toBe(377.5);
+    expect(daily.count).toBe(2);
+    expect(daily.missingPaidDates).toBe(1);
+    expect(daily.byMethod.find((r) => r.method === "dinheiro")?.movement).toBe(-100);
+    expect(dashboardDay([...rows, paid, expense], "2026-11-05").count).toBe(0);
   });
 });
