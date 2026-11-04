@@ -24,3 +24,8 @@ export function readPayroll(txn: Txn): Payroll | null {
     return null;
   }
 }
+
+/** Reuse identity and recurring amounts only; never repeat one-off payments or settlement. */
+export function nextPayrollMonth(payroll: Payroll): Payroll {
+  return { ...payroll, commission: 0, bonus: 0, discount: 0, vacation: 0, termination: 0 };
+}

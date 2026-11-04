@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { pageHead } from "@/lib/head";
 import {
+  addMonths,
   formatBRL,
   formatDate,
   monthKey,
@@ -13,7 +14,7 @@ import {
   type Txn,
   type PaymentMethod,
 } from "@/lib/finance";
-import { payrollSchema, readPayroll, type Payroll } from "@/lib/payroll";
+import { nextPayrollMonth, payrollSchema, readPayroll, type Payroll } from "@/lib/payroll";
 import { categoriesQuery, myAccessQuery, txnsByCompetenceQuery } from "@/lib/queries";
 import { supabase } from "@/integrations/supabase/client";
 import { MonthPicker, PageHeader } from "@/components/finance/ui";
@@ -51,6 +52,9 @@ const fields = [
 function MonthlyPayroll({ month }: { month: string }) {
   const range = monthRange(month);
   const query = useQuery(txnsByCompetenceQuery(range.start, range.end));
+  const previousMonth = monthKey(addMonths(range.start, -1));
+  const previousRange = monthRange(previousMonth);
+  const previous = useQuery(txnsByCompetenceQuery(previousRange.start, previousRange.end));
   const categories = useQuery(categoriesQuery());
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Txn | null>(null);
@@ -63,6 +67,18 @@ function MonthlyPayroll({ month }: { month: string }) {
     const payroll = readPayroll(txn);
     return payroll ? [{ txn, payroll }] : [];
   });
+  const identity = (p: Payroll) => `${p.group}:${p.name.trim().toLocaleLowerCase("pt-BR")}`;
+  const currentPeople = new Set(rows.map((r) => identity(r.payroll)));
+  const suggestions = [
+    ...new Map(
+      (previous.data ?? []).flatMap((txn) => {
+        const payroll = readPayroll(txn);
+        return payroll && !currentPeople.has(identity(payroll))
+          ? [[identity(payroll), { txn, payroll }] as const]
+          : [];
+      }),
+    ).values(),
+  ];
   const invalidate = () => qc.invalidateQueries({ queryKey: ["txns"] });
   async function requireAdmin() {
     const access = await qc.fetchQuery({ ...myAccessQuery(), staleTime: 0 });
@@ -183,6 +199,58 @@ function MonthlyPayroll({ month }: { month: string }) {
           Acrescentar colaborador neste mês
         </Button>
       </div>
+      <section className="surface-card mb-4 p-5">
+        <h2 className="font-semibold">Equipe do mês anterior</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Nomes, cargos, salário-base e adicionais são reaproveitados. Comissão, bonificação,
+          descontos, férias e acerto final começam zerados. Confira e salve cada pessoa para incluir
+          a despesa neste mês.
+        </p>
+        {previous.isPending ? (
+          <p role="status">Carregando equipe anterior…</p>
+        ) : previous.isError ? (
+          <p role="alert">
+            Não foi possível carregar a equipe anterior.{" "}
+            <button className="underline" onClick={() => void previous.refetch()}>
+              Tentar novamente
+            </button>
+          </p>
+        ) : suggestions.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Nenhum colaborador do mês anterior aguardando inclusão.
+          </p>
+        ) : (
+          <ul className="mt-3 divide-y divide-border">
+            {suggestions.map(({ txn, payroll }) => (
+              <li
+                key={identity(payroll)}
+                className="flex flex-wrap items-center justify-between gap-3 py-3"
+              >
+                <div>
+                  <strong>{payroll.name}</strong>
+                  <p className="text-sm text-muted-foreground">
+                    {payroll.group === "dentista" ? "Dentista" : "Funcionário"} ·{" "}
+                    {payroll.role || "Sem cargo"} · Base {formatBRL(payroll.base)} · Adicionais{" "}
+                    {formatBRL(payroll.additional)}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  disabled={!!form}
+                  onClick={() => {
+                    open(undefined, nextPayrollMonth(payroll));
+                    setCategory(txn.category_id ?? "");
+                    setMethod(txn.payment_method);
+                    setDue(addMonths(txn.due_date, 1));
+                  }}
+                >
+                  Preparar neste mês
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       {form && (
         <form
           className="surface-card mb-4 space-y-4 p-5"

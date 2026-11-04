@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { payrollTotal, type Txn } from "./finance";
-import { readPayroll, payrollSchema } from "./payroll";
+import { readPayroll, payrollSchema, nextPayrollMonth } from "./payroll";
 describe("remuneração mensal", () => {
   it("soma salário, adicionais, comissão, bônus, férias e rescisão e desconta uma vez", () => {
     expect(
@@ -43,4 +43,29 @@ describe("remuneração mensal", () => {
     expect(p.termination).toBe(0);
     expect(p.vacation).toBe(0);
   });
+});
+
+it("reaproveita fixos e zera variáveis, férias e rescisão sem alterar o mês anterior", () => {
+  const original = payrollSchema.parse({
+    source: "essencial-payroll-v1",
+    group: "funcionario",
+    name: "Teste",
+    role: "ASB",
+    base: 2000,
+    additional: 300,
+    commission: 100,
+    bonus: 200,
+    discount: 50,
+    vacation: 1000,
+    termination: 2000,
+  });
+  expect(nextPayrollMonth(original)).toEqual({
+    ...original,
+    commission: 0,
+    bonus: 0,
+    discount: 0,
+    vacation: 0,
+    termination: 0,
+  });
+  expect(original.vacation).toBe(1000);
 });
