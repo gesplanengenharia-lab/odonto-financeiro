@@ -79,7 +79,11 @@ describe("boletos e despesas fixas", () => {
   });
 
   it("pix pago à vista entra como pago", () => {
-    !;
+    const row = buildLaunchRows(
+      { kind: "entrada", description: "Limpeza", payment_method: "pix", amount: 150, date: "2026-11-04", installments: 1, paid: true },
+      settings,
+      gid,
+    )[0]!;
     expect(row.status).toBe("pago");
     expect(row.paid_date).toBe("2026-11-04");
   });
