@@ -264,3 +264,66 @@ export function monthRange(key: string) {
 export function nextMonths(fromKey: string, count: number) {
   return Array.from({ length: count }, (_, i) => monthKey(addMonths(`${fromKey}-01`, i)));
 }
+
+/** Settled cash uses paid_date; pending cash uses due_date. Legacy paid rows
+ * without paid_date fall back to due_date and are disclosed in the dashboard.
+ * Overdue receivables are excluded from the conservative closing forecast.
+ */
+export function dashboardMonth(txns: Txn[], month: string, today = todayISO()) {
+  const { start, end } = monthRange(month);
+  const within = (date: string) => date >= start && date <= end;
+  const settled = txns.filter((t) => t.status === "pago" && within(t.paid_date || t.due_date));
+  const pending = txns.filter((t) => t.status === "pendente" && within(t.due_date));
+  const total = (rows: Txn[], kind: Kind) =>
+    round2(rows.filter((t) => t.kind === kind).reduce((v, t) => v + cashValue(t), 0));
+  const received = total(settled, "entrada");
+  const paid = total(settled, "saida");
+  const receivable = total(pending, "entrada");
+  const overdueReceivable = total(
+    pending.filter((t) => t.due_date < today),
+    "entrada",
+  );
+  const toReceive = round2(receivable - overdueReceivable);
+  const toPay = total(pending, "saida");
+  const priorPending = txns.filter((t) => t.status === "pendente" && t.due_date < start);
+  const priorToPay = total(priorPending, "saida");
+  const priorToReceive = total(priorPending, "entrada");
+  const realized = round2(received - paid);
+  const projected = round2(realized + toReceive - toPay - priorToPay);
+  const byMethod = (Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((method) => {
+    const received = total(
+      settled.filter((t) => t.payment_method === method),
+      "entrada",
+    );
+    const open = pending.filter((t) => t.payment_method === method);
+    const overdue = total(
+      open.filter((t) => t.due_date < today),
+      "entrada",
+    );
+    const expected = round2(total(open, "entrada") - overdue);
+    return { method, received, expected, overdue, total: round2(received + expected + overdue) };
+  });
+  return {
+    received,
+    paid,
+    receivable,
+    overdueReceivable,
+    toReceive,
+    toPay,
+    priorToPay,
+    priorToReceive,
+    realized,
+    projected,
+    byMethod,
+    totalExpected: round2(received + toReceive),
+    totalOut: round2(paid + toPay + priorToPay),
+    missingPaidDates: settled.filter((t) => !t.paid_date).length,
+    cashDre: summarize(settled),
+  };
+}
+
+/** Opening balance is a simulation, not an inferred bank balance or a new entry. */
+export function dashboardFunding(projected: number, opening: number) {
+  const closing = round2(opening + projected);
+  return { closing, contribution: round2(Math.max(0, -closing)) };
+}

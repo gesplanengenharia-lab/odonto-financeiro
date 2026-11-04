@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  dashboardMonth,
+  dashboardFunding,
+  type Txn,
   buildLaunchRows,
   cardFeePercent,
   isDefaulted,
@@ -111,5 +114,136 @@ describe("margem de lucro", () => {
     expect(s.profit).toBe(4600);
     expect(s.margin).toBe(46);
     expect(s.fixedExpenses).toBe(3000);
+  });
+});
+
+describe("dashboard mensal", () => {
+  const row = (patch: Partial<Txn> = {}): Txn => ({
+    id: "test",
+    kind: "entrada",
+    description: "Teste",
+    person: null,
+    category_id: null,
+    nature: null,
+    payment_method: "pix",
+    status: "pendente",
+    competence_date: "2026-11-01",
+    due_date: "2026-11-20",
+    paid_date: null,
+    gross_amount: 100,
+    fee_amount: 0,
+    net_amount: 100,
+    installment_number: 1,
+    installment_total: 1,
+    group_id: null,
+    notes: null,
+    ...patch,
+  });
+
+  it("atribui recebimentos e pagamentos ao mês efetivo, sem duplicar vencimentos antigos", () => {
+    const rows = [
+      row({ status: "pago", due_date: "2026-10-15", paid_date: "2026-11-03" }),
+      row({
+        kind: "saida",
+        status: "pago",
+        due_date: "2026-10-01",
+        paid_date: "2026-11-02",
+        gross_amount: 40,
+        net_amount: 40,
+      }),
+      row({ status: "pago", paid_date: "2026-12-01" }),
+    ];
+    const nov = dashboardMonth(rows, "2026-11", "2026-11-04");
+    expect(nov.received).toBe(100);
+    expect(nov.paid).toBe(40);
+    expect(nov.realized).toBe(60);
+    expect(nov.byMethod.find((r) => r.method === "pix")?.received).toBe(100);
+    expect(dashboardMonth(rows, "2026-10", "2026-11-04").received).toBe(0);
+    expect(dashboardMonth(rows, "2026-12", "2026-11-04").received).toBe(100);
+  });
+
+  it("usa cartão líquido e exclui recebíveis vencidos da previsão, inclusive cartões", () => {
+    const m = dashboardMonth(
+      [
+        row({ payment_method: "credito", fee_amount: 5, net_amount: 95 }),
+        row({ payment_method: "boleto", due_date: "2026-11-01" }),
+        row({ payment_method: "debito", due_date: "2026-11-02", fee_amount: 2, net_amount: 98 }),
+        row({ due_date: "2026-11-04", payment_method: "dinheiro" }),
+        row({ due_date: "2026-12-01" }),
+      ],
+      "2026-11",
+      "2026-11-04",
+    );
+    expect(m.toReceive).toBe(195);
+    expect(m.overdueReceivable).toBe(198);
+    expect(m.receivable).toBe(393);
+    expect(m.projected).toBe(195);
+    expect(m.byMethod.reduce((v, r) => v + r.expected, 0)).toBe(m.toReceive);
+    expect(m.byMethod.reduce((v, r) => v + r.overdue, 0)).toBe(m.overdueReceivable);
+  });
+
+  it("inclui despesas antigas pendentes, sem contar recebíveis antigos como caixa", () => {
+    const m = dashboardMonth(
+      [
+        row({ kind: "saida", due_date: "2026-10-01", gross_amount: 250, net_amount: 250 }),
+        row({ kind: "saida", gross_amount: 200, net_amount: 200 }),
+        row({ due_date: "2026-10-20", gross_amount: 1000, net_amount: 1000 }),
+        row(),
+      ],
+      "2026-11",
+      "2026-11-04",
+    );
+    expect(m.priorToPay).toBe(250);
+    expect(m.priorToReceive).toBe(1000);
+    expect(m.toPay).toBe(200);
+    expect(m.projected).toBe(-350);
+    expect(dashboardFunding(m.projected, 150)).toEqual({ closing: -200, contribution: 200 });
+    expect(dashboardFunding(m.projected, 400)).toEqual({ closing: 50, contribution: 0 });
+  });
+
+  it("mantém DRE por competência e caixa separados, sem descontar a taxa duas vezes", () => {
+    const paid = row({
+      status: "pago",
+      paid_date: "2026-11-01",
+      payment_method: "credito",
+      fee_amount: 5,
+      net_amount: 95,
+    });
+    const future = row({ due_date: "2026-12-01" });
+    const expense = row({
+      kind: "saida",
+      nature: "fixa",
+      status: "pago",
+      paid_date: "2026-11-02",
+      gross_amount: 50,
+      net_amount: 50,
+    });
+    const m = dashboardMonth([paid, future, expense], "2026-11", "2026-11-04");
+    expect(m.cashDre.profit).toBe(45);
+    expect(m.realized).toBe(45);
+    expect(summarize([paid, future, expense]).profit).toBe(145);
+  });
+
+  it("expõe datas ausentes, aceita saldo negativo e arredonda centavos", () => {
+    const m = dashboardMonth(
+      [
+        row({ status: "pago", gross_amount: 0.1, net_amount: 0.1 }),
+        row({ status: "pago", gross_amount: 0.2, net_amount: 0.2 }),
+      ],
+      "2026-11",
+      "2026-11-04",
+    );
+    expect(m.missingPaidDates).toBe(2);
+    expect(m.received).toBe(0.3);
+    expect(dashboardFunding(m.projected, -0.5)).toEqual({ closing: -0.2, contribution: 0.2 });
+  });
+
+  it("mês vazio não gera receitas, despesas ou margem fictícias", () => {
+    const m = dashboardMonth([], "2027-01", "2026-11-04");
+    expect(m.received).toBe(0);
+    expect(m.toPay).toBe(0);
+    expect(m.projected).toBe(0);
+    expect(m.byMethod).toHaveLength(6);
+    expect(m.cashDre.margin).toBe(0);
   });
 });
