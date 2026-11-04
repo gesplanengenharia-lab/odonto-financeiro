@@ -45,7 +45,11 @@ describe("lançamento parcelado no crédito", () => {
   });
 
   it("débito cai no dia seguinte com taxa de 1,5%", () => {
-    !;
+    const row = buildLaunchRows(
+      { kind: "entrada", description: "Consulta", payment_method: "debito", amount: 200, date: "2026-11-04", installments: 5 },
+      settings,
+      gid,
+    )[0]!;
     expect(row.due_date).toBe("2026-11-05");
     expect(row.fee_amount).toBe(3);
     expect(row.installment_total).toBe(1);
