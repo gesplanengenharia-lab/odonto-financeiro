@@ -1,3 +1,4 @@
+import clinicLogo from "@/assets/essencial-logo.png";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
@@ -82,7 +83,7 @@ function AuthPage() {
     <div className="grid min-h-screen lg:grid-cols-2">
       <div className="surface-ink hidden rounded-none p-12 lg:flex lg:flex-col lg:justify-between">
         <Link to="/" className="font-display text-lg font-semibold">
-          Essencial Odontologia
+          <img src={clinicLogo} alt="Essencial Odontologia" className="w-64 max-w-full rounded-lg bg-[#976f67] p-4" />
         </Link>
         <div>
           <h2 className="max-w-md text-3xl font-semibold leading-tight">Cada parcela, cada boleto, cada taxa no lugar certo.</h2>

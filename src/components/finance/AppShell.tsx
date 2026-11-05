@@ -17,12 +17,12 @@ import {
   LogOut,
   Menu,
   X,
-  Wallet,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { canUse, firstAllowedPath } from "@/lib/access";
 import { myAccessQuery } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
+import clinicLogo from "@/assets/essencial-logo.png";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -81,8 +81,7 @@ export function AppShell() {
   const sidebar = (
     <nav className="flex h-full flex-col bg-sidebar px-3 py-5 text-sidebar-foreground">
       <div className="mb-8 flex items-center gap-2 px-3 font-display text-base font-semibold text-sidebar-accent-foreground">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground"><Wallet className="h-4 w-4" /></span>
-        Essencial Odontologia
+        <img src={clinicLogo} alt="Essencial Odontologia" className="w-full max-w-[210px] rounded-lg bg-[#976f67] p-3" />
       </div>
       <ul className="flex flex-1 flex-col gap-1">
         {nav.filter((item) => canUse(access, item.to.slice(1))).map((item) => (
@@ -114,7 +113,7 @@ export function AppShell() {
       <aside className="sticky top-0 hidden h-screen lg:block">{sidebar}</aside>
 
       <div className="flex items-center justify-between border-b border-border bg-card px-4 py-3 lg:hidden">
-        <span className="font-display font-semibold">Essencial Odontologia</span>
+        <img src={clinicLogo} alt="Essencial Odontologia" className="h-14 w-auto rounded-md bg-[#976f67] p-2" />
         <Button variant="ghost" size="icon" aria-label="Abrir menu" onClick={() => setOpen(true)}>
           <Menu />
         </Button>
