@@ -401,3 +401,25 @@ it("separa dinheiro/Pix pendentes e pagamentos de outros meses do caixa selecion
   expect(cashPixMonth(rows,"2026-09","2026-09-11").received).toBe(100);
   expect(cashPixMonth(rows,"2026-10","2026-09-11").received).toBe(0);
 });
+
+
+it("inclui débito líquido no caixa imediato, pela data de recebimento, sem antecipar pendências", () => {
+  const debit: Txn = { ...buildLaunchRows({kind:"entrada",description:"Débito",payment_method:"debito",
+    amount:1000,date:"2026-10-31",installments:1},settings,gid)[0]!, id:"debit",status:"pago",paid_date:"2026-11-01" };
+  const rows = [debit,
+    {...debit,id:"cash",payment_method:"dinheiro" as const,gross_amount:50,net_amount:50,fee_amount:0},
+    {...debit,id:"pix",payment_method:"pix" as const,gross_amount:100,net_amount:100,fee_amount:0},
+    {...debit,id:"pending",status:"pendente" as const,paid_date:null,due_date:"2026-11-20",gross_amount:200,fee_amount:3,net_amount:197},
+    {...debit,id:"overdue",status:"pendente" as const,paid_date:null,due_date:"2026-11-01",gross_amount:100,fee_amount:1.5,net_amount:98.5},
+    {...debit,id:"old",paid_date:"2026-10-30"},
+    {...debit,id:"credit",payment_method:"credito" as const},
+    {...debit,id:"expense",kind:"saida" as const,gross_amount:400,net_amount:400,fee_amount:0},
+  ];
+  const cash = cashPixMonth(rows,"2026-11","2026-11-05");
+  expect(cash.debito).toBe(985);
+  expect(cash.received).toBe(1135);
+  expect(cash.expected).toBe(197);
+  expect(cash.balance).toBe(735);
+  expect(cash.projectedBalance).toBe(932);
+  expect(cash.entries.map(t=>t.id).sort()).toEqual(["cash","debit","pix"]);
+});

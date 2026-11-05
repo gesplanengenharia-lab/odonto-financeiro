@@ -349,17 +349,18 @@ export function monthBilling(txns: Txn[], month: string) {
   return { total, received, pending: round2(total - received), count: rows.length, byMethod };
 }
 
-export const LIQUID_METHODS: PaymentMethod[] = ["dinheiro", "pix"];
+export const LIQUID_METHODS: PaymentMethod[] = ["dinheiro", "pix", "debito"];
 
-/** Dinheiro + Pix received in the month (by payment date) is the money used to
+/** Dinheiro + Pix + debit received in the month (by payment date) is the money used to
  * pay the month's bills: paid + open bills of the month + older open bills. */
 export function cashPixMonth(txns: Txn[], month: string, today = todayISO()) {
   const m = dashboardMonth(txns, month, today);
   const pick = (method: PaymentMethod) => m.byMethod.find((r) => r.method === method)!;
   const dinheiro = pick("dinheiro").received;
   const pix = pick("pix").received;
-  const received = round2(dinheiro + pix);
-  const expected = round2(pick("dinheiro").expected + pick("pix").expected);
+  const debito = pick("debito").received;
+  const received = round2(dinheiro + pix + debito);
+  const expected = round2(pick("dinheiro").expected + pick("pix").expected + pick("debito").expected);
   const billsOpen = round2(m.toPay + m.priorToPay);
   const bills = round2(m.paid + billsOpen);
   const { start, end } = monthRange(month);
@@ -376,6 +377,7 @@ export function cashPixMonth(txns: Txn[], month: string, today = todayISO()) {
   return {
     dinheiro,
     pix,
+    debito,
     received,
     expected,
     billsPaid: m.paid,
@@ -546,3 +548,4 @@ export function payrollTotal(values: PayrollAmounts) {
   if (total < 0) throw new Error("Os descontos não podem superar a remuneração do mês.");
   return total / 100;
 }
+

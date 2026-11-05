@@ -148,7 +148,7 @@ function Painel() {
               <TabsTrigger value="resumo">Resumo</TabsTrigger>
               <TabsTrigger value="faturamento">Faturamento</TabsTrigger>
               <TabsTrigger value="recebimentos">Recebimentos</TabsTrigger>
-              <TabsTrigger value="caixa">Dinheiro e Pix</TabsTrigger>
+              <TabsTrigger value="caixa">Dinheiro, Pix e débito</TabsTrigger>
               <TabsTrigger value="dre">DRE e custos</TabsTrigger>
               <TabsTrigger value="diario">Fechamento diário</TabsTrigger>
             </TabsList>
@@ -213,7 +213,7 @@ function Painel() {
                       className="text-sm font-medium text-primary hover:underline"
                       onClick={() => setTab("caixa")}
                     >
-                      Dinheiro e Pix recebidos
+                      Dinheiro, Pix e débito recebidos
                     </button>
                     <p className="text-xs text-muted-foreground">
                       Parte do total recebido no caixa
@@ -666,3 +666,4 @@ function Painel() {
     </div>
   );
 }
+
