@@ -23,9 +23,9 @@ jobs:
           node-version: '22'
       - name: Instalar dependências
         run: pnpm install --no-frozen-lockfile
+      - name: Compilar e gerar rotas tipadas
+        run: pnpm run build
       - name: Validar TypeScript
         run: pnpm exec tsc --noEmit
       - name: Executar testes
         run: pnpm test
-      - name: Compilar aplicação
-        run: pnpm run build
