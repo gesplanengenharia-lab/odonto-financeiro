@@ -549,3 +549,43 @@ export function payrollTotal(values: PayrollAmounts) {
   return total / 100;
 }
 
+
+
+export interface DownPaymentInput {
+  amount: number;
+  payment_method: PaymentMethod;
+  first_due_date?: string;
+  paid?: boolean;
+}
+
+/** A sale has one competence and one total; the down payment and balance
+ * generate separate payment rows linked by the same group, never recurrences. */
+export function buildLaunchPlan(
+  input: NewLaunchInput & { down_payment?: DownPaymentInput },
+  settings: CardSettings,
+  makeGroupId: () => string,
+) {
+  const validDate = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date;
+  const cents = (amount: number) => {
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 999999999 || Math.abs(round2(amount) - amount) > 0.000001)
+      throw new Error("Informe um valor positivo, com até duas casas decimais.");
+    return Math.round(amount * 100);
+  };
+  const total = cents(input.amount);
+  if (!validDate(input.date) || (input.first_due_date && !validDate(input.first_due_date))) throw new Error("Informe datas válidas para a venda e os vencimentos.");
+  if (!Number.isInteger(input.installments) || input.installments < 1 || input.installments > (input.payment_method === "credito" ? 12 : 24)) throw new Error("Confira a quantidade de parcelas.");
+  const { down_payment: down, ...sale } = input;
+  const common = { ...sale, repeat_months: 1 };
+  if (!down) return { rows: buildLaunchRows(common, settings, makeGroupId), entryAmount: 0, remaining: total / 100 };
+  if (input.kind !== "entrada") throw new Error("Pagamento com entrada é destinado às receitas.");
+  const entry = cents(down.amount);
+  if (entry >= total) throw new Error("A entrada deve ser menor que o valor total. Para pagamento integral, desmarque a opção de entrada.");
+  if (down.first_due_date && !validDate(down.first_due_date)) throw new Error("Informe uma data válida para a entrada.");
+  const group = makeGroupId();
+  const remaining = (total - entry) / 100;
+  const entryRows = buildLaunchRows({ ...common, amount: entry / 100, description: `${sale.description} · Entrada`,
+    payment_method: down.payment_method, installments: 1, first_due_date: down.first_due_date || sale.date,
+    paid: !!down.paid }, settings, () => group);
+  const balanceRows = buildLaunchRows({ ...common, amount: remaining, description: `${sale.description} · Saldo` }, settings, () => group);
+  return { rows: [...entryRows, ...balanceRows].map(row => ({ ...row, group_id: group })), entryAmount: entry / 100, remaining };
+}

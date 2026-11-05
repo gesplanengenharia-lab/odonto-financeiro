@@ -9,6 +9,7 @@ import {
   dashboardFunding,
   type Txn,
   buildLaunchRows,
+  buildLaunchPlan,
   cardFeePercent,
   isDefaulted,
   summarize,
@@ -422,4 +423,45 @@ it("inclui débito líquido no caixa imediato, pela data de recebimento, sem ant
   expect(cash.balance).toBe(735);
   expect(cash.projectedBalance).toBe(932);
   expect(cash.entries.map(t=>t.id).sort()).toEqual(["cash","debit","pix"]);
+});
+
+
+describe("entrada e saldo restante da venda", () => {
+  const sale = {kind:"entrada" as const,description:"Tratamento",person:"Paciente",category_id:"cat",payment_method:"credito" as const,
+    amount:1000,date:"2026-11-05",installments:4,paid:false};
+  it("gera entrada Pix e somente o saldo parcelado no cartão, sem duplicar competência", () => {
+    const plan = buildLaunchPlan({...sale,down_payment:{amount:200,payment_method:"pix",first_due_date:"2026-11-05",paid:true}},settings,()=>"sale");
+    expect(plan.remaining).toBe(800);expect(plan.rows).toHaveLength(5);
+    expect(plan.rows[0]).toMatchObject({gross_amount:200,net_amount:200,fee_amount:0,status:"pago",payment_method:"pix"});
+    expect(plan.rows.slice(1).every(r=>r.gross_amount===200&&r.fee_amount===9&&r.net_amount===191&&r.status==="pendente")).toBe(true);
+    expect(new Set(plan.rows.map(r=>r.group_id))).toEqual(new Set(["sale"]));
+    expect(plan.rows.every(r=>r.competence_date===sale.date&&r.person==="Paciente"&&r.category_id==="cat")).toBe(true);
+    const rows=plan.rows.map((r,i)=>({...r,id:String(i)}));
+    expect(monthBilling(rows,"2026-11").total).toBe(1000);
+    expect(dashboardMonth(rows,"2026-11","2026-11-05").received).toBe(200);
+    expect(rows.reduce((v,r)=>v+r.net_amount,0)).toBe(964);
+  });
+  it.each(["pix","dinheiro","boleto","cheque","credito","debito"] as const)("aceita entrada em %s com taxas próprias e saldo em boleto", method => {
+    const plan=buildLaunchPlan({...sale,payment_method:"boleto",first_due_date:"2026-12-05",installments:3,
+      down_payment:{amount:200,payment_method:method,first_due_date:"2026-11-20",paid:false}},settings,()=>"sale");
+    expect(plan.rows).toHaveLength(4);expect(plan.rows[0]!.payment_method).toBe(method);
+    expect(plan.rows.slice(1).map(r=>r.due_date)).toEqual(["2026-12-05","2027-01-05","2027-02-05"]);
+    expect(plan.rows.slice(1).map(r=>r.gross_amount)).toEqual([266.66,266.66,266.68]);
+    expect(plan.rows.reduce((s,r)=>Math.round(s+r.gross_amount*100),0)).toBe(100000);
+    expect(plan.rows.slice(1).every(r=>r.fee_amount===0)).toBe(true);
+    if(method==="credito")expect(plan.rows[0]!.fee_amount).toBe(6.4);
+    if(method==="debito")expect(plan.rows[0]!.fee_amount).toBe(3);
+  });
+  it("ignora recorrência no novo plano e cria só as parcelas escolhidas", () => {
+    const plan=buildLaunchPlan({...sale,repeat_months:12},settings,()=>"sale");
+    expect(plan.rows).toHaveLength(4);expect(plan.rows.reduce((s,r)=>s+r.gross_amount,0)).toBe(1000);
+  });
+  it.each([0,-1,1000,1100,Number.NaN])("bloqueia entrada inválida %s",amount=>{
+    expect(()=>buildLaunchPlan({...sale,down_payment:{amount,payment_method:"pix"}},settings,()=>"sale")).toThrow();
+  });
+  it("permite saldo em dinheiro/Pix parcelado e não arredonda a venda para cima",()=>{
+    const plan=buildLaunchPlan({...sale,amount:100.01,payment_method:"pix",first_due_date:"2026-12-05",installments:3,
+      down_payment:{amount:20,payment_method:"dinheiro",paid:true}},settings,()=>"sale");
+    expect(plan.rows.map(r=>r.gross_amount)).toEqual([20,26.67,26.67,26.67]);
+  });
 });
