@@ -111,7 +111,8 @@ function MonthlyPayroll({ month }: { month: string }) {
             .from("transactions")
             .update(payload)
             .eq("id", editing.id)
-            .eq("status", "pendente")
+            .eq("status", editing.status)
+            .eq("notes", editing.notes ?? "")
             .select("id")
         : await supabase
             .from("transactions")
@@ -431,7 +432,7 @@ function MonthlyPayroll({ month }: { month: string }) {
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={txn.status === "pago" || !!form || remove.isPending}
+                            disabled={!!form || remove.isPending}
                             onClick={() => open(txn, payroll)}
                           >
                             Editar
@@ -470,7 +471,8 @@ function MonthlyPayroll({ month }: { month: string }) {
               {group === "funcionario"
                 ? "Despesas classificadas como fixas, incluindo os ajustes mensais informados."
                 : "Despesas classificadas como variáveis."}{" "}
-              Para editar ou retirar um pagamento já baixado, desfaça a baixa em Contas primeiro.
+              A edição preserva a data e o status do pagamento. Para retirar um pagamento já
+              baixado, desfaça a baixa em Contas primeiro.
             </p>
           </section>
         );
