@@ -99,11 +99,21 @@ export const movementsQuery = () => queryOptions({
 export const reconciliationsQuery = () => queryOptions({
   queryKey: ["treasury", "reconciliations"],
   queryFn: async (): Promise<FinancialReconciliation[]> => {
-    const { data, error } = await treasuryDb.from("bank_reconciliations").select("*")
-      .order("reconciliation_date", { ascending: false }).limit(500);
-    if (error) throw error;
-    return (data ?? []).map((r) => ({ ...r, statement_balance: Number(r.statement_balance),
-      expected_balance: Number(r.expected_balance), difference: Number(r.difference) }));
+    const all: FinancialReconciliation[] = [];
+    for (let page = 0; ; page++) {
+      const { data, error } = await treasuryDb.from("bank_reconciliations").select("*")
+        .order("reconciliation_date", { ascending: false }).order("id", { ascending: true })
+        .range(page * 500, (page + 1) * 500 - 1);
+      if (error) throw error;
+      all.push(...(data ?? []).map((r) => ({
+        ...r,
+        statement_balance: Number(r.statement_balance),
+        expected_balance: Number(r.expected_balance),
+        difference: Number(r.difference),
+      })));
+      if (!data || data.length < 500) break;
+    }
+    return all;
   },
 });
 export const accountBalancesQuery = (accounts: FinancialAccount[], asOf: string) => queryOptions({
