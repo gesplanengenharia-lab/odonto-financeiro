@@ -36,6 +36,13 @@
       "when": 1793896439662,
       "tag": "0004_schedule_auto_settle",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793915369379,
+      "tag": "0005_treasury_foundation",
+      "breakpoints": true
     }
   ]
 }
