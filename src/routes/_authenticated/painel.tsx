@@ -158,15 +158,26 @@ function Painel() {
           </div>
 
           <section
-            className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
-            aria-label="Indicadores percentuais do mês"
+            className="mt-4 grid gap-4 sm:grid-cols-2"
+            aria-label="Lucro e margem do mês"
           >
             <StatCard
-              label="Resultado gerencial"
+              label={m.cashDre.profit < 0 ? "Prejuízo do mês · caixa" : "Lucro do mês · caixa"}
+              value={m.cashDre.profit}
+              tone={m.cashDre.profit >= 0 ? "income" : "expense"}
+              hint={<><strong className="text-base">{m.cashDre.grossRevenue > 0 ? formatPct(m.cashDre.margin) : "—"}</strong> de margem · recebido menos despesas pagas no mês. Não inclui parcelas futuras nem saldo inicial.</>}
+            />
+            <StatCard
+              label={s.profit < 0 ? "Prejuízo do mês · competência" : "Lucro do mês · competência"}
               value={s.profit}
               tone={s.profit >= 0 ? "income" : "expense"}
-              hint={`${pct(indicators.profitPct)} de margem sobre a receita bruta · competência`}
+              hint={<><strong className="text-base">{pct(indicators.profitPct)}</strong> de margem · vendas menos despesas atribuídas ao mês, incluindo valores ainda pendentes.</>}
             />
+          </section>
+          <section
+            className="mt-4 grid gap-4 sm:grid-cols-3"
+            aria-label="Indicadores percentuais do mês"
+          >
             <StatCard
               label="Inadimplência do mês"
               value={indicators.defaultedAmount}

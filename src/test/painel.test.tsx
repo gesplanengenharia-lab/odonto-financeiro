@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComponentType, ReactNode } from "react";
 import type { Txn } from "@/lib/finance";
@@ -76,6 +76,20 @@ describe("Painel e simulação", () => {
     expect(screen.queryByLabelText("Saldo inicial do mês (R$)")).not.toBeInTheDocument();
     expect(screen.getByText("Simulação")).toBeInTheDocument();
     expect(screen.getByLabelText("Indicadores percentuais do mês")).toBeInTheDocument();
+  });
+  it("destaca lucro de caixa e competência com margens e sem antecipar parcelas pendentes", () => {
+    state.rows.push({ ...state.rows[0]!, id: "paid", kind: "entrada", nature: null,
+      status: "pago", paid_date: "2026-11-03", gross_amount: 1000, net_amount: 1000 });
+    state.rows.push({ ...state.rows[1]!, id: "future", status: "pendente", paid_date: null,
+      due_date: "2026-12-03", gross_amount: 1000, net_amount: 1000 });
+    render(<Panel />);
+    const profits = within(screen.getByLabelText("Lucro e margem do mês"));
+    expect(profits.getByText("Lucro do mês · caixa")).toBeInTheDocument();
+    expect(profits.getByText("Lucro do mês · competência")).toBeInTheDocument();
+    expect(profits.getByText(/100,0%/)).toBeInTheDocument();
+    expect(profits.getByText(/75,0%/)).toBeInTheDocument();
+    expect(profits.getByText(/1.000,00/)).toBeInTheDocument();
+    expect(profits.getByText(/1.500,00/)).toBeInTheDocument();
   });
   it("não calcula aporte quando a consulta da simulação falha", () => {
     state.error = true;
