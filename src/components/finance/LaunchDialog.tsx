@@ -232,6 +232,11 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
             {installments > 1 || repeat > 1 ? "1ª parcela já foi paga" : "Já foi pago"}
           </label>
         )}
+        {kind === "entrada" && (
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            Entradas recebem baixa automática na data de vencimento. Se o paciente não pagar, desfaça a baixa em Lançamentos para ele aparecer em Inadimplentes.
+          </p>
+        )}
         <div className="grid gap-1.5 sm:col-span-2">
           <Label htmlFor="notes">Observações</Label>
           <Textarea id="notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
