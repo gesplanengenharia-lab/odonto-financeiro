@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader, EmptyState, StatCard } from "@/components/finance/ui";
 import { QueryFeedback } from "@/components/finance/QueryFeedback";
+import { TreasuryLinking } from "@/components/finance/TreasuryLinking";
 import { pageHead } from "@/lib/head";
 import { formatBRL, todayISO } from "@/lib/finance";
 import { myAccessQuery } from "@/lib/queries";
@@ -52,7 +53,7 @@ function Tesouraria() {
   const [asOf, setAsOf] = useState(todayISO());
   const rows = accounts.data ?? [];
   const balances = useQuery({ ...accountBalancesQuery(rows, asOf), enabled: admin && rows.length > 0 && isISODate(asOf) });
-  const [mode, setMode] = useState<"contas" | "movimentos" | "conferencias">("contas");
+  const [mode, setMode] = useState<"contas" | "movimentos" | "conferencias" | "vinculos">("contas");
   const [showCreate, setShowCreate] = useState<"conta" | "movimento" | "conferencia" | null>(null);
 
   const createAccount = useMutation({ mutationFn: addTreasuryAccount, onSuccess: async () => {
@@ -81,7 +82,7 @@ function Tesouraria() {
         </div>} />
       <div className="mb-5 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
         <strong className="text-foreground">Controle separado do resultado operacional.</strong> Aportes, financiamentos e transferências movimentam patrimônio, não faturamento.
-        Lançamentos antigos sem conta vinculada não compõem os saldos bancários. Baixa automática não equivale a conciliação.
+        Lançamentos antigos sem conta vinculada não compõem os saldos bancários. Baixa automática não equivale a conciliação. Use a aba de vínculos para atribuir pagamentos após conferir a movimentação real.
       </div>
       <div className="mb-5 flex flex-wrap items-end gap-3">
         <FormField label="Posição em"><Input type="date" value={asOf} max={todayISO()} onChange={(e) => setAsOf(e.target.value)} /></FormField>
@@ -101,7 +102,7 @@ function Tesouraria() {
       </QueryFeedback>
 
       <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="Visões da tesouraria">
-        {([["contas", "Contas e saldos"], ["movimentos", "Movimentações"], ["conferencias", "Conciliações"]] as const).map(([value, label]) => (
+        {([["contas", "Contas e saldos"], ["vinculos", "Vincular pagamentos"], ["movimentos", "Movimentações"], ["conferencias", "Conciliações"]] as const).map(([value, label]) => (
           <Button key={value} size="sm" variant={mode === value ? "default" : "outline"} role="tab" aria-selected={mode === value} onClick={() => setMode(value)}>{label}</Button>
         ))}
       </div>
@@ -121,6 +122,11 @@ function Tesouraria() {
             </div>
           ))}
         </div>
+      )}
+      {mode === "vinculos" && (
+        <QueryFeedback loading={accounts.isPending} error={accounts.isError} retry={() => void accounts.refetch()}>
+          <TreasuryLinking accounts={rows} />
+        </QueryFeedback>
       )}
       {mode === "movimentos" && (
         <QueryFeedback loading={movements.isPending} error={movements.isError} retry={() => void movements.refetch()}>
@@ -180,7 +186,7 @@ function AccountForm({ busy, save, close }: { busy: boolean; save: (v: NewAccoun
     <SelectField label="Tipo" value={kind} onChange={(v) => setKind(v as "banco" | "caixa")}><option value="banco">Conta bancária</option><option value="caixa">Caixa físico</option></SelectField>
     <FormField label="Data de abertura"><Input required type="date" max={todayISO()} value={date} onChange={(e) => setDate(e.target.value)} /></FormField>
     <FormField label="Saldo inicial real (R$)"><Input required inputMode="decimal" value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="0,00" /></FormField>
-    <p className="text-xs text-muted-foreground">Utilize o saldo efetivo da data informada. Não inclua lançamentos anteriores novamente.</p>
+    <p className="text-xs text-muted-foreground">Informe o saldo real no início do dia de abertura, antes dos pagamentos dessa data. As movimentações desse dia serão acrescentadas ao saldo inicial. Não inclua pagamentos anteriores novamente.</p>
     <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={close}>Cancelar</Button><Button type="submit" disabled={busy}>{busy ? "Salvando…" : "Cadastrar"}</Button></div>
   </form>;
 }
