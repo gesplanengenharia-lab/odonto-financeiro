@@ -156,7 +156,8 @@ export function useTxnMutations() {
       await requirePermission("baixar");
       const { error } = await supabase
         .from("transactions")
-        .update(paid ? { status: "pago", paid_date: date ?? new Date().toISOString().slice(0, 10) } : { status: "pendente", paid_date: null })
+        // Undoing a payment marks the row as manual so the daily auto-settle won't re-pay it (inadimplência).
+        .update(paid ? { status: "pago", paid_date: date ?? new Date().toISOString().slice(0, 10) } : { status: "pendente", paid_date: null, auto_settle: false })
         .in("id", ids);
       if (error) throw error;
     },
