@@ -56,8 +56,6 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
   const { data: categories = [] } = useQuery(categoriesQuery());
   const { data: settings } = useQuery(cardSettingsQuery());
   const { create } = useTxnMutations();
-  const { data: access } = useQuery(myAccessQuery());
-  const canSettle = canUse(access, "baixar");
 
   const [kind, setKind] = useState<Kind>(defaultKind);
   const [description, setDescription] = useState("");
@@ -70,7 +68,6 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
   const [firstDue, setFirstDue] = useState(todayISO());
   const [installments, setInstallments] = useState(1);
   const [repeat, setRepeat] = useState(1);
-  const [paid, setPaid] = useState(true);
   const [notes, setNotes] = useState("");
 
   const isCard = method === "debito" || method === "credito";
@@ -92,13 +89,13 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
         first_due_date: firstDue,
         installments,
         repeat_months: repeat,
-        paid: paid && canSettle,
+        paid: false,
         notes,
       },
       settings,
       () => crypto.randomUUID(),
     );
-  }, [settings, value, kind, description, person, categoryId, nature, method, date, firstDue, installments, repeat, paid, notes, canSettle]);
+  }, [settings, value, kind, description, person, categoryId, nature, method, date, firstDue, installments, repeat, notes]);
 
   const totalFee = rows.reduce((s, r) => s + r.fee_amount, 0);
   const totalNet = rows.reduce((s, r) => s + r.net_amount, 0);
@@ -226,12 +223,7 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
             ))}
           </NativeSelect>
         </div>
-        {!isCard && (
-          <label className="flex items-center gap-2 self-end pb-2 text-sm">
-            <input type="checkbox" className="h-4 w-4 accent-primary" disabled={!canSettle} checked={paid && canSettle} onChange={(e) => setPaid(e.target.checked)} />
-            {installments > 1 || repeat > 1 ? "1ª parcela já foi paga" : "Já foi pago"}
-          </label>
-        )}
+        <p className="text-xs text-muted-foreground sm:col-span-2">O recebimento ou pagamento é considerado realizado automaticamente no vencimento. Parcelas futuras continuam na previsão; se não ocorrer, edite a situação do lançamento.</p>
         <div className="grid gap-1.5 sm:col-span-2">
           <Label htmlFor="notes">Observações</Label>
           <Textarea id="notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />

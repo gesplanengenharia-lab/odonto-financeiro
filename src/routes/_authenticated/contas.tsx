@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { pageHead } from "@/lib/head";
 import { cashValue, isOverdue, PAYMENT_LABELS, todayISO, addDays, type PaymentMethod } from "@/lib/finance";
-import { pendingQuery } from "@/lib/queries";
+import { txnsByDueQuery } from "@/lib/queries";
 import { LaunchDialog, NativeSelect } from "@/components/finance/LaunchDialog";
 import { TxnTable } from "@/components/finance/TxnTable";
 import { EmptyState, PageHeader, StatCard } from "@/components/finance/ui";
@@ -18,24 +18,26 @@ function Contas() {
   const [tab, setTab] = useState<"entrada" | "saida">("saida");
   const [period, setPeriod] = useState("todos");
   const [method, setMethod] = useState("");
-  const { data = [], isLoading } = useQuery(pendingQuery());
+  const [status, setStatus] = useState("todos");
+  const { data = [], isLoading } = useQuery(txnsByDueQuery());
   const today = todayISO();
 
   const ofKind = data.filter((t) => t.kind === tab && (tab === "saida" || (t.payment_method !== "credito" && t.payment_method !== "debito")));
   const rows = ofKind.filter((t) => {
+    if (status !== "todos" && t.status !== status) return false;
     if (method && t.payment_method !== method) return false;
     if (period === "atrasados") return isOverdue(t, today);
     if (period === "7") return t.due_date >= today && t.due_date <= addDays(today, 7);
     if (period === "30") return t.due_date >= today && t.due_date <= addDays(today, 30);
     return true;
   });
-  const total = (f: (t: (typeof data)[number]) => boolean) => ofKind.filter(f).reduce((s, t) => s + cashValue(t), 0);
+  const total = (f: (t: (typeof data)[number]) => boolean) => ofKind.filter(t => t.status === "pendente" && f(t)).reduce((s, t) => s + cashValue(t), 0);
 
   return (
     <div>
       <PageHeader
         title="Contas a pagar e receber"
-        subtitle="Tudo que está pendente, com vencimento. Clique no ✓ para dar baixa."
+        subtitle="Pagamentos automáticos no vencimento. Use o lápis para editar valores ou registrar não recebido / não pago."
         actions={<LaunchDialog defaultKind={tab} />}
       />
       <Tabs value={tab} onValueChange={(v) => setTab(v as "entrada" | "saida")} className="mb-4">
@@ -52,6 +54,9 @@ function Contas() {
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
+        <NativeSelect aria-label="Situação das contas" className="w-48" value={status} onChange={e => setStatus(e.target.value)}>
+          <option value="todos">Todas as situações</option><option value="pendente">Pendentes / futuras</option><option value="pago">Pagas / recebidas</option>
+        </NativeSelect>
         <NativeSelect className="w-48" value={period} onChange={(e) => setPeriod(e.target.value)}>
           <option value="todos">Todos os vencimentos</option>
           <option value="atrasados">Atrasados</option>
@@ -73,10 +78,11 @@ function Contas() {
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Carregando…</p>
       ) : rows.length === 0 ? (
-        <EmptyState title="Nenhuma conta pendente aqui" />
+        <EmptyState title="Nenhuma conta neste filtro" />
       ) : (
         <TxnTable rows={rows} />
       )}
     </div>
   );
 }
+

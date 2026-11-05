@@ -197,6 +197,7 @@ function Painel() {
               hint={`${pct(indicators.variablePct)} das despesas do mês · competência`}
             />
           </section>
+          <p className="mt-2 text-xs text-muted-foreground">Pagamentos são considerados realizados no vencimento, salvo exceções editadas. Esta visão não é conciliação bancária.</p>
           <p className="mt-2 text-xs text-muted-foreground">
             Inadimplência: valores ainda pendentes ÷ total com vencimento já passado no mês, sem
             cartões. Despesas não incluem taxas de cartão. “—” indica ausência de base para
@@ -366,13 +367,13 @@ function Painel() {
                 label="Entrou no dia"
                 value={daily.received}
                 tone="income"
-                hint="Recebimentos líquidos confirmados"
+                hint="Recebimentos líquidos, incluindo automáticos no vencimento"
               />
               <StatCard
                 label="Saiu no dia"
                 value={daily.paid}
                 tone="expense"
-                hint="Pagamentos confirmados"
+                hint="Pagamentos, incluindo automáticos no vencimento"
               />
               <StatCard
                 label="Movimento líquido do dia"
@@ -444,7 +445,7 @@ function Painel() {
                   DRE gerencial do mês
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Caixa: o que foi recebido e pago. Competência: receitas e despesas atribuídas ao
+                  Caixa: recebimentos e pagamentos, incluindo os considerados realizados no vencimento. Competência: receitas e despesas atribuídas ao
                   mês, mesmo sem pagamento.
                 </p>
               </div>

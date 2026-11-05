@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
-import { financialAssistantContext, type Txn } from "./finance";
+import { effectivePayment, financialAssistantContext, type Txn } from "./finance";
 import { financialQuestionSchema, type FinancialQuestion } from "./financial-assistant-schema";
 
 const recentRequests = new Map<string, number[]>();
@@ -46,7 +46,7 @@ export async function askFinancialData(
       const { data, error } = await db
         .from("transactions")
         .select(
-          "kind,category_id,nature,payment_method,status,competence_date,due_date,paid_date,gross_amount,fee_amount,net_amount",
+          "kind,category_id,nature,payment_method,status,competence_date,due_date,paid_date,gross_amount,fee_amount,net_amount,auto_settle",
         )
         .order("id")
         .range(offset, offset + 999);
@@ -71,7 +71,7 @@ export async function askFinancialData(
         ok: false as const,
         error: "Há categorias demais para esta consulta. Solicite ajuste ao administrador.",
       };
-    const normalized = rows.map((t) => ({
+    const normalized = rows.map((t) => effectivePayment({
       ...t,
       gross_amount: Number(t.gross_amount),
       fee_amount: Number(t.fee_amount),
