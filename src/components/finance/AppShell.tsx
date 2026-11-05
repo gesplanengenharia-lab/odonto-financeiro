@@ -1,6 +1,6 @@
 import { Link, Outlet, useNavigate, useLocation } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Calculator,
@@ -46,6 +46,15 @@ export function AppShell() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const userId = access?.user?.id;
+
+  // Patient receivables settle automatically on their due date (also scheduled daily on the server).
+  useEffect(() => {
+    if (!userId) return;
+    void supabase.rpc("auto_settle_due_entries").then(({ data }) => {
+      if (data && data > 0) void qc.invalidateQueries({ queryKey: ["txns"] });
+    });
+  }, [userId, qc]);
 
   async function signOut() {
     await qc.cancelQueries();
