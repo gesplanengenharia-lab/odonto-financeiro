@@ -3,6 +3,8 @@ import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import type { TreasuryKind } from "./treasury";
+import { assertCanLinkPaidTransaction, assertCanReconcilePaidTransaction } from "./treasury-linking";
+import { todayISO } from "./finance";
 
 type Table<Row, Insert, Update = Partial<Insert>> = {
   Row: Row; Insert: Insert; Update: Update; Relationships: [];
@@ -27,9 +29,32 @@ export type FinancialReconciliation = {
 export type NewAccount = Pick<FinancialAccount, "name" | "kind" | "opening_date" | "opening_balance">;
 export type NewMovement = Pick<FinancialMovement, "kind" | "account_id" | "destination_account_id" | "movement_date" | "amount" | "description">;
 export type NewReconciliation = Pick<FinancialReconciliation, "account_id" | "reconciliation_date" | "statement_balance" | "notes">;
+type ExistingTransactions = Database["public"]["Tables"]["transactions"];
+export type PaidFinancialTransaction = {
+  id: string;
+  kind: "entrada" | "saida";
+  description: string;
+  person: string | null;
+  status: "pago" | "pendente";
+  paid_date: string | null;
+  due_date: string;
+  gross_amount: number;
+  net_amount: number;
+  financial_account_id: string | null;
+  reconciled_at: string | null;
+  reconciled_by: string | null;
+};
+type ExtendedTransactions = {
+  Row: ExistingTransactions["Row"] & Pick<PaidFinancialTransaction, "financial_account_id" | "reconciled_at" | "reconciled_by">;
+  Insert: ExistingTransactions["Insert"] & Partial<Pick<PaidFinancialTransaction, "financial_account_id" | "reconciled_at" | "reconciled_by">>;
+  Update: ExistingTransactions["Update"] & Partial<Pick<PaidFinancialTransaction, "financial_account_id" | "reconciled_at" | "reconciled_by">>;
+  Relationships: ExistingTransactions["Relationships"];
+};
+
 type TreasuryDatabase = Omit<Database, "public"> & {
   public: Omit<Database["public"], "Tables" | "Functions"> & {
-    Tables: Database["public"]["Tables"] & {
+    Tables: Omit<Database["public"]["Tables"], "transactions"> & {
+      transactions: ExtendedTransactions;
       financial_accounts: Table<FinancialAccount, NewAccount>;
       treasury_movements: Table<FinancialMovement, NewMovement, Partial<NewMovement> & { void_reason?: string; voided_at?: string }>;
       bank_reconciliations: Table<FinancialReconciliation, NewReconciliation>;
@@ -106,4 +131,67 @@ export async function addTreasuryMovement(input: NewMovement) {
 export async function addBankReconciliation(input: NewReconciliation) {
   const { error } = await treasuryDb.from("bank_reconciliations").insert(input);
   if (error) throw error;
+}
+
+/** Somente transações com baixa e data efetiva; consulta paginada para não omitir parcelas antigas. */
+export const paidFinancialTransactionsQuery = () => queryOptions({
+  queryKey: ["treasury", "paid-transactions"],
+  queryFn: async (): Promise<PaidFinancialTransaction[]> => {
+    const all: PaidFinancialTransaction[] = [];
+    for (let page = 0; ; page++) {
+      const { data, error } = await treasuryDb.from("transactions")
+        .select("id,kind,description,person,status,paid_date,due_date,gross_amount,net_amount,financial_account_id,reconciled_at,reconciled_by")
+        .eq("status", "pago").not("paid_date", "is", null)
+        .order("paid_date", { ascending: false }).order("id", { ascending: true })
+        .range(page * 500, (page + 1) * 500 - 1);
+      if (error) throw error;
+      all.push(...(data ?? []).map((row) => ({
+        ...row,
+        kind: row.kind as PaidFinancialTransaction["kind"],
+        status: row.status as PaidFinancialTransaction["status"],
+        gross_amount: Number(row.gross_amount),
+        net_amount: Number(row.net_amount),
+      })));
+      if (!data || data.length < 500) break;
+    }
+    return all;
+  },
+});
+/** Vincula sem mudar status, valor, vencimento ou data do pagamento. */
+export async function linkPaidFinancialTransaction(input: {
+  transaction: PaidFinancialTransaction;
+  account: FinancialAccount;
+}) {
+  const { transaction, account } = input;
+  assertCanLinkPaidTransaction(transaction, account, todayISO());
+  const { data, error } = await treasuryDb.from("transactions")
+    .update({ financial_account_id: account.id })
+    .eq("id", transaction.id).eq("status", "pago")
+    .eq("paid_date", transaction.paid_date!)
+    .eq("kind", transaction.kind)
+    .eq("gross_amount", transaction.gross_amount)
+    .eq("net_amount", transaction.net_amount)
+    .is("financial_account_id", null)
+    .is("reconciled_at", null)
+    .select("id").maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("O lançamento mudou ou não há permissão. Atualize a lista antes de vincular.");
+}
+/** Confirma uma transação já paga e vinculada após conferência humana do extrato. */
+export async function confirmPaidFinancialTransaction(transaction: PaidFinancialTransaction) {
+  assertCanReconcilePaidTransaction(transaction, todayISO());
+  const { data: identity, error: identityError } = await treasuryDb.auth.getUser();
+  if (identityError) throw identityError;
+  if (!identity.user) throw new Error("Sessão expirada. Entre novamente.");
+  const { data, error } = await treasuryDb.from("transactions")
+    .update({ reconciled_at: new Date().toISOString(), reconciled_by: identity.user.id })
+    .eq("id", transaction.id).eq("status", "pago")
+    .eq("paid_date", transaction.paid_date!)
+    .eq("financial_account_id", transaction.financial_account_id!)
+    .eq("gross_amount", transaction.gross_amount)
+    .eq("net_amount", transaction.net_amount)
+    .is("reconciled_at", null)
+    .select("id").maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("A transação já foi alterada, conciliada ou você não tem permissão. Atualize a lista.");
 }
