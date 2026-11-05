@@ -115,7 +115,7 @@ function Tesouraria() {
               <h2 className="mt-3 font-semibold">{account.name}</h2>
               <p className="text-xs text-muted-foreground">{account.kind === "caixa" ? "Caixa físico" : "Conta bancária"} · Abertura {account.opening_date.split("-").reverse().join("/")}</p>
               <p className="mt-4 font-display text-2xl font-semibold tabular-nums">
-                {account.opening_date > asOf ? "Ainda não aberta" : balances.isError ? "Indisponível" : balances.data?.[account.id] === undefined ? "Calculando…" : formatBRL(balances.data[account.id])}
+                {account.opening_date > asOf ? "Ainda não aberta" : balances.isError ? "Indisponível" : balances.data?.[account.id] === undefined ? "Calculando…" : formatBRL(balances.data?.[account.id] ?? 0)}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">Saldo inicial: {formatBRL(account.opening_balance)}</p>
             </div>
