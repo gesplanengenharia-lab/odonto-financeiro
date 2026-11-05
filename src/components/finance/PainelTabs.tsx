@@ -161,7 +161,7 @@ export function CashPixTab({ month, data }: { month: string; data: CashPix }) {
 
       <p className="text-xs text-muted-foreground">
         Esta aba destaca dinheiro e Pix recebidos pela data do pagamento. Os demais recebimentos
-        estão na Visão geral. A comparação com as contas usa as despesas cadastradas e não inclui
+        estão na aba Recebimentos. A comparação com as contas usa as despesas cadastradas e não inclui
         saldo inicial, aportes ou retiradas; não representa o saldo bancário disponível.
       </p>
 
@@ -219,4 +219,5 @@ export function CashPixTab({ month, data }: { month: string; data: CashPix }) {
     </div>
   );
 }
+
 

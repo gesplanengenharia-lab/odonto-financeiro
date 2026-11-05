@@ -75,21 +75,76 @@ describe("Painel e simulação", () => {
     render(<Panel />);
     expect(screen.queryByLabelText("Saldo inicial do mês (R$)")).not.toBeInTheDocument();
     expect(screen.getByText("Simulação")).toBeInTheDocument();
-    expect(screen.getByLabelText("Indicadores percentuais do mês")).toBeInTheDocument();
+    expect(screen.getByLabelText("Resumo financeiro do mês")).toBeInTheDocument();
   });
   it("destaca lucro de caixa e competência com margens e sem antecipar parcelas pendentes", () => {
-    state.rows.push({ ...state.rows[0]!, id: "paid", kind: "entrada", nature: null,
-      status: "pago", paid_date: "2026-11-03", gross_amount: 1000, net_amount: 1000 });
-    state.rows.push({ ...state.rows[1]!, id: "future", status: "pendente", paid_date: null,
-      due_date: "2026-12-03", gross_amount: 1000, net_amount: 1000 });
+    state.rows.push({
+      ...state.rows[0]!,
+      id: "paid",
+      kind: "entrada",
+      nature: null,
+      status: "pago",
+      paid_date: "2026-11-03",
+      gross_amount: 1000,
+      net_amount: 1000,
+    });
+    state.rows.push({
+      ...state.rows[1]!,
+      id: "future",
+      status: "pendente",
+      paid_date: null,
+      due_date: "2026-12-03",
+      gross_amount: 1000,
+      net_amount: 1000,
+    });
     render(<Panel />);
-    const profits = within(screen.getByLabelText("Lucro e margem do mês"));
-    expect(profits.getByText("Lucro do mês · caixa")).toBeInTheDocument();
-    expect(profits.getByText("Lucro do mês · competência")).toBeInTheDocument();
-    expect(profits.getByText(/100,0%/)).toBeInTheDocument();
-    expect(profits.getByText(/75,0%/)).toBeInTheDocument();
-    expect(profits.getByText(/1.000,00/)).toBeInTheDocument();
-    expect(profits.getByText(/1.500,00/)).toBeInTheDocument();
+    const summary = within(screen.getByLabelText("Resumo financeiro do mês"));
+    expect(summary.getByText("Lucro do mês · caixa")).toBeInTheDocument();
+    expect(summary.getByText(/100,0%/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "DRE gerencial do mês" })).not.toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "DRE e custos" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    const dre = within(screen.getByRole("region", { name: "DRE gerencial do mês" }));
+    expect(dre.getByText(/75,0%/)).toBeInTheDocument();
+    expect(dre.getByText(/1.500,00/)).toBeInTheDocument();
+  });
+  it("mantém só quatro indicadores no resumo e preserva detalhes em abas próprias", () => {
+    render(<Panel />);
+    const summary = screen.getByLabelText("Resumo financeiro do mês");
+    expect(summary.children).toHaveLength(4);
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Dia da conferência")).not.toBeInTheDocument();
+    const tabs = [
+      ["Faturamento", "Faturamento por forma de pagamento"],
+      ["Recebimentos", "Recebimentos por forma de pagamento"],
+      ["Dinheiro e Pix", "Entradas em dinheiro e Pix do mês"],
+      ["DRE e custos", "Onde estão os custos do mês"],
+      ["Fechamento diário", "Fechamento diário — conferência"],
+    ];
+    for (const [tab, heading] of tabs) {
+      fireEvent.mouseDown(screen.getByRole("tab", { name: tab! }), { button: 0, ctrlKey: false });
+      expect(screen.getByRole("heading", { name: new RegExp(heading!) })).toBeInTheDocument();
+      expect(screen.queryByLabelText("Resumo financeiro do mês")).not.toBeInTheDocument();
+    }
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Resumo" }), { button: 0, ctrlKey: false });
+    expect(screen.getByLabelText("Resumo financeiro do mês")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+  it("abre os recebimentos e dinheiro/Pix diretamente pelos atalhos do resumo", () => {
+    render(<Panel />);
+    fireEvent.click(screen.getByRole("button", { name: "Dinheiro e Pix recebidos" }));
+    expect(screen.getByRole("tab", { name: "Dinheiro e Pix" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Resumo" }), { button: 0, ctrlKey: false });
+    fireEvent.click(screen.getByRole("button", { name: "Ainda deve entrar no mês" }));
+    expect(screen.getByRole("tab", { name: "Recebimentos" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
   it("não calcula aporte quando a consulta da simulação falha", () => {
     state.error = true;
@@ -121,6 +176,10 @@ describe("Painel e simulação", () => {
   });
   it("mantém a conferência diária alinhada ao mês e permite escolher outra data", () => {
     render(<Panel />);
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Fechamento diário" }), {
+      button: 0,
+      ctrlKey: false,
+    });
     expect(screen.getByLabelText("Dia da conferência")).toHaveValue("2026-11-04");
     fireEvent.click(screen.getByRole("button", { name: "Próximo mês" }));
     expect(screen.getByLabelText("Dia da conferência")).toHaveValue("2026-12-01");
@@ -135,12 +194,12 @@ describe("Painel e simulação", () => {
     state.pending = true;
     render(<Panel />);
     expect(screen.getByRole("status")).toHaveTextContent("Carregando o financeiro");
-    expect(screen.queryByText("Já entrou no mês")).not.toBeInTheDocument();
+    expect(screen.queryByText("Recebido no caixa")).not.toBeInTheDocument();
   });
   it("não apresenta previsão financeira quando há erro de consulta", () => {
     state.error = true;
     render(<Panel />);
     expect(screen.getByRole("alert")).toHaveTextContent("Não foi possível carregar o painel");
-    expect(screen.queryByText("Movimento previsto do mês")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Resumo financeiro do mês")).not.toBeInTheDocument();
   });
 });
