@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   dashboardDay,
+  monthBilling,
+  cashPixMonth,
   dashboardIndicators,
   dashboardCosts,
   dashboardMonth,
@@ -338,4 +340,40 @@ it("parcela cheque sem taxas e considera atraso na inadimplência", () => {
  expect(rows.every(r=>r.gross_amount===500 && r.fee_amount===0 && r.status==="pendente")).toBe(true);
  expect(rows[6]!.due_date).toBe("2027-04-01");
  expect(isDefaulted(rows[0]!,"2026-11-01")).toBe(true);
+});
+
+describe("faturamento por competência e caixa em dinheiro/Pix", () => {
+  const txn = (overrides: Partial<Txn> = {}) => ({ kind: "entrada", payment_method: "pix", status: "pago", paid_date: "2026-11-02", due_date: "2026-11-01", competence_date: "2026-11-01", gross_amount: 100, net_amount: 100, fee_amount: 0, nature: null, category_id: null, ...overrides }) as Txn;
+
+  it("faturamento soma o valor bruto pela competência, incluindo parcelas futuras", () => {
+    const rows = [
+      txn(),
+      txn({ payment_method: "credito", status: "pendente", paid_date: null, due_date: "2027-01-01", gross_amount: 300 }),
+      txn({ competence_date: "2026-10-31", gross_amount: 999 }),
+      txn({ kind: "saida", gross_amount: 50 }),
+    ];
+    const b = monthBilling(rows, "2026-11");
+    expect(b.total).toBe(400);
+    expect(b.received).toBe(100);
+    expect(b.pending).toBe(300);
+    expect(b.byMethod.find((r) => r.method === "credito")?.percent).toBe(75);
+    expect(b.byMethod.find((r) => r.method === "pix")?.percent).toBe(25);
+  });
+
+  it("dinheiro e Pix recebidos no mês pagam as contas do mês e as anteriores em aberto", () => {
+    const rows = [
+      txn({ gross_amount: 500, net_amount: 500 }),
+      txn({ payment_method: "dinheiro", gross_amount: 200, net_amount: 200 }),
+      txn({ payment_method: "boleto", gross_amount: 1000, net_amount: 1000 }),
+      txn({ kind: "saida", gross_amount: 300 }),
+      txn({ kind: "saida", status: "pendente", paid_date: null, due_date: "2026-11-20", gross_amount: 250 }),
+      txn({ kind: "saida", status: "pendente", paid_date: null, due_date: "2026-10-10", gross_amount: 100 }),
+    ];
+    const c = cashPixMonth(rows, "2026-11", "2026-11-05");
+    expect(c.received).toBe(700);
+    expect(c.bills).toBe(650);
+    expect(c.billsOpen).toBe(350);
+    expect(c.balance).toBe(50);
+    expect(c.entries).toHaveLength(2);
+  });
 });

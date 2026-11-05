@@ -323,6 +323,71 @@ export function dashboardMonth(txns: Txn[], month: string, today = todayISO()) {
   };
 }
 
+/** Faturamento: gross receivables by competence_date (what the clinic billed in
+ * the month), regardless of when each installment is paid. */
+export function monthBilling(txns: Txn[], month: string) {
+  const { start, end } = monthRange(month);
+  const rows = txns.filter(
+    (t) => t.kind === "entrada" && t.competence_date >= start && t.competence_date <= end,
+  );
+  const gross = (list: Txn[]) => round2(list.reduce((v, t) => v + Number(t.gross_amount), 0));
+  const total = gross(rows);
+  const byMethod = (Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((method) => {
+    const list = rows.filter((t) => t.payment_method === method);
+    const amount = gross(list);
+    const received = gross(list.filter((t) => t.status === "pago"));
+    return {
+      method,
+      amount,
+      received,
+      pending: round2(amount - received),
+      count: list.length,
+      percent: total > 0 ? round2((amount / total) * 100) : null,
+    };
+  });
+  const received = gross(rows.filter((t) => t.status === "pago"));
+  return { total, received, pending: round2(total - received), count: rows.length, byMethod };
+}
+
+export const LIQUID_METHODS: PaymentMethod[] = ["dinheiro", "pix"];
+
+/** Dinheiro + Pix received in the month (by payment date) is the money used to
+ * pay the month's bills: paid + open bills of the month + older open bills. */
+export function cashPixMonth(txns: Txn[], month: string, today = todayISO()) {
+  const m = dashboardMonth(txns, month, today);
+  const pick = (method: PaymentMethod) => m.byMethod.find((r) => r.method === method)!;
+  const dinheiro = pick("dinheiro").received;
+  const pix = pick("pix").received;
+  const received = round2(dinheiro + pix);
+  const expected = round2(pick("dinheiro").expected + pick("pix").expected);
+  const billsOpen = round2(m.toPay + m.priorToPay);
+  const bills = round2(m.paid + billsOpen);
+  const { start, end } = monthRange(month);
+  const entries = txns
+    .filter(
+      (t) =>
+        t.kind === "entrada" &&
+        t.status === "pago" &&
+        LIQUID_METHODS.includes(t.payment_method) &&
+        (t.paid_date || t.due_date) >= start &&
+        (t.paid_date || t.due_date) <= end,
+    )
+    .sort((a, b) => (b.paid_date || b.due_date).localeCompare(a.paid_date || a.due_date));
+  return {
+    dinheiro,
+    pix,
+    received,
+    expected,
+    billsPaid: m.paid,
+    billsOpen,
+    bills,
+    balance: round2(received - bills),
+    projectedBalance: round2(received + expected - bills),
+    coveragePct: bills > 0 ? round2((received / bills) * 100) : null,
+    entries,
+  };
+}
+
 /** Opening balance is a simulation, not an inferred bank balance or a new entry. */
 export function dashboardFunding(projected: number, opening: number) {
   const closing = round2(opening + projected);

@@ -31,7 +31,11 @@ import {
   summarize,
   todayISO,
   addDays,
+  monthBilling,
+  cashPixMonth,
 } from "@/lib/finance";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { BillingTab, CashPixTab } from "@/components/finance/PainelTabs";
 import { categoriesQuery, txnsByCompetenceQuery, txnsByDueQuery } from "@/lib/queries";
 import { LaunchDialog } from "@/components/finance/LaunchDialog";
 import {
@@ -60,6 +64,8 @@ function Painel() {
   // All dates are required: an old installment may have been settled this month.
   const cashQuery = useQuery(txnsByDueQuery());
   const compQuery = useQuery(txnsByCompetenceQuery(start, end));
+  const historyStart = addMonths(start, -5);
+  const historyQuery = useQuery(txnsByCompetenceQuery(historyStart, end));
   const categoryQuery = useQuery(categoriesQuery());
   const cash = useMemo(() => cashQuery.data ?? [], [cashQuery.data]);
   const comp = compQuery.data ?? [];
@@ -75,6 +81,9 @@ function Painel() {
   const indicators = dashboardIndicators(cash, comp, month, today);
   const costs = dashboardCosts(comp, categoryQuery.data ?? []);
   const pct = (value: number | null) => (value === null ? "—" : formatPct(value));
+  const billing = monthBilling(comp, month);
+  const liquid = useMemo(() => cashPixMonth(cash, month, today), [cash, month, today]);
+  const historyMonths = nextMonths(monthKey(historyStart), 6);
   const history = nextMonths(monthKey(addMonths(start, -5)), 6).map((k) => {
     const row = dashboardMonth(cash, k, today);
     return { mes: formatMonth(k), Recebido: row.received, Pago: row.paid };
@@ -158,7 +167,55 @@ function Painel() {
           </div>
 
           <section
-            className="mt-4 grid gap-4 sm:grid-cols-2"
+            className="mt-4 grid gap-4 sm:grid-cols-3"
+            aria-label="Faturamento e caixa do mês"
+          >
+            <StatCard
+              label="Faturado no mês · competência"
+              value={billing.total}
+              tone="primary"
+              hint={`${billing.count} lançamento(s) de ${formatMonth(month, true)}, incluindo parcelas futuras`}
+            />
+            <StatCard
+              label="Dinheiro + Pix recebido"
+              value={liquid.received}
+              tone="income"
+              hint={`Dinheiro ${formatBRL(liquid.dinheiro)} · Pix ${formatBRL(liquid.pix)}`}
+            />
+            <StatCard
+              label={liquid.balance < 0 ? "Falta para as contas" : "Sobra após as contas"}
+              value={liquid.balance}
+              tone={liquid.balance >= 0 ? "income" : "expense"}
+              hint={`Dinheiro + Pix − ${formatBRL(liquid.bills)} em contas do mês`}
+            />
+          </section>
+
+          <Tabs defaultValue="geral" className="mt-6">
+            <TabsList className="h-auto flex-wrap">
+              <TabsTrigger value="geral">Visão geral</TabsTrigger>
+              <TabsTrigger value="faturamento">Faturamento do mês</TabsTrigger>
+              <TabsTrigger value="caixa">Dinheiro e Pix</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="faturamento">
+              <BillingTab
+                month={month}
+                billing={billing}
+                history={historyMonths.map((k) => ({
+                  month: k,
+                  billing: monthBilling(historyQuery.data ?? [], k),
+                }))}
+                historyLoading={historyQuery.isPending}
+              />
+            </TabsContent>
+
+            <TabsContent value="caixa">
+              <CashPixTab month={month} data={liquid} />
+            </TabsContent>
+
+            <TabsContent value="geral">
+          <section
+            className="mt-2 grid gap-4 sm:grid-cols-2"
             aria-label="Lucro e margem do mês"
           >
             <StatCard
@@ -212,10 +269,11 @@ function Painel() {
           <section className="surface-card mt-4 overflow-hidden" aria-labelledby="methods-title">
             <div className="p-5 sm:p-6">
               <h2 id="methods-title" className="text-base font-semibold">
-                Entradas por forma de pagamento
+                Recebimentos por forma de pagamento · caixa
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Valores líquidos. Cartões já descontam as taxas; parcelas aparecem no respectivo mês
+                O que cai no mês pela data de recebimento (o faturamento por competência está na
+                aba “Faturamento do mês”). Valores líquidos. Cartões já descontam as taxas; parcelas aparecem no respectivo mês
                 de recebimento. O percentual mostra a participação no total líquido já recebido no
                 mês.
               </p>
@@ -572,6 +630,8 @@ function Painel() {
               )}
             </div>
           </div>
+            </TabsContent>
+          </Tabs>
         </>
       )}
     </div>
