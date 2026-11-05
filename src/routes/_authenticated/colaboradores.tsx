@@ -54,7 +54,7 @@ function MonthlyPayroll({ month }: { month: string }) {
   const query = useQuery(txnsByCompetenceQuery(range.start, range.end));
   const previousMonth = monthKey(addMonths(range.start, -1));
   const previousRange = monthRange(previousMonth);
-  const previous = useQuery(txnsByCompetenceQuery(previousRange.start, previousRange.end));
+  const previous = useQuery(txnsByCompetenceQuery(undefined, previousRange.end));
   const categories = useQuery(categoriesQuery());
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Txn | null>(null);
@@ -69,14 +69,21 @@ function MonthlyPayroll({ month }: { month: string }) {
   });
   const identity = (p: Payroll) => `${p.group}:${p.name.trim().toLocaleLowerCase("pt-BR")}`;
   const currentPeople = new Set(rows.map((r) => identity(r.payroll)));
+  const priorPayroll = (previous.data ?? []).filter((txn) => readPayroll(txn));
+  const latestMonth = priorPayroll.reduce(
+    (latest, txn) => (txn.competence_date > latest ? txn.competence_date : latest),
+    "",
+  );
   const suggestions = [
     ...new Map(
-      (previous.data ?? []).flatMap((txn) => {
-        const payroll = readPayroll(txn);
-        return payroll && !currentPeople.has(identity(payroll))
-          ? [[identity(payroll), { txn, payroll }] as const]
-          : [];
-      }),
+      priorPayroll
+        .filter((txn) => txn.competence_date === latestMonth)
+        .flatMap((txn) => {
+          const payroll = readPayroll(txn);
+          return payroll && !currentPeople.has(identity(payroll))
+            ? [[identity(payroll), { txn, payroll }] as const]
+            : [];
+        }),
     ).values(),
   ];
   const invalidate = () => qc.invalidateQueries({ queryKey: ["txns"] });
@@ -86,6 +93,56 @@ function MonthlyPayroll({ month }: { month: string }) {
       throw new Error("Apenas administradores podem alterar a folha.");
     return access.user.id;
   }
+  const prepareAll = useMutation({
+    mutationFn: async () => {
+      const userId = await requireAdmin();
+      const fresh = await qc.fetchQuery({
+        ...txnsByCompetenceQuery(range.start, range.end),
+        staleTime: 0,
+      });
+      const present = new Set(
+        fresh.flatMap((txn) => {
+          const p = readPayroll(txn);
+          return p ? [identity(p)] : [];
+        }),
+      );
+      const missing = suggestions.filter(({ payroll }) => !present.has(identity(payroll)));
+      if (!missing.length) return;
+      const inserts = missing.map(({ txn, payroll }) => {
+        const data = nextPayrollMonth(payroll);
+        const amount = payrollTotal(data);
+        const distance =
+          (Number(month.slice(0, 4)) - Number(txn.competence_date.slice(0, 4))) * 12 +
+          Number(month.slice(5)) -
+          Number(txn.competence_date.slice(5, 7));
+        return {
+          kind: "saida" as const,
+          description: `${data.group === "funcionario" ? "Funcionário" : "Dentista"}: ${data.name}`,
+          person: data.name,
+          category_id: txn.category_id,
+          nature: txn.nature,
+          payment_method: txn.payment_method,
+          competence_date: range.start,
+          due_date: addMonths(txn.due_date, distance),
+          paid_date: null,
+          status: "pendente" as const,
+          gross_amount: amount,
+          net_amount: amount,
+          fee_amount: 0,
+          notes: JSON.stringify(data),
+          created_by: userId,
+        };
+      });
+      const { error } = await supabase.from("transactions").insert(inserts);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await invalidate();
+      toast.success("Equipe incluída neste mês. Ajuste os valores variáveis em Editar.");
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Não foi possível preparar a folha"),
+  });
   const save = useMutation({
     mutationFn: async () => {
       const userId = await requireAdmin();
@@ -196,17 +253,26 @@ function MonthlyPayroll({ month }: { month: string }) {
           aparece em Contas e no DRE. Faça a baixa em Contas quando pagar. Edite aqui para evitar
           lançar a mesma remuneração duas vezes.
         </p>
-        <Button className="mt-3" onClick={() => open()} disabled={!!form}>
+        <Button className="mt-3" onClick={() => open()} disabled={!!form || prepareAll.isPending}>
           Acrescentar colaborador neste mês
         </Button>
       </div>
       <section className="surface-card mb-4 p-5">
-        <h2 className="font-semibold">Equipe do mês anterior</h2>
+        <h2 className="font-semibold">Equipe de referência</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Nomes, cargos, salário-base e adicionais são reaproveitados. Comissão, bonificação,
-          descontos, férias e acerto final começam zerados. Confira e salve cada pessoa para incluir
-          a despesa neste mês.
+          A última folha disponível fornece nomes, cargos, salário-base e adicionais. Comissão,
+          bonificação, descontos, férias e acerto final começam zerados. Confira e salve cada pessoa
+          para incluir a despesa neste mês.
         </p>
+        {suggestions.length > 0 && (
+          <Button
+            className="mt-3"
+            disabled={!!form || prepareAll.isPending || previous.isFetching || query.isFetching}
+            onClick={() => prepareAll.mutate()}
+          >
+            {prepareAll.isPending ? "Incluindo equipe…" : "Incluir equipe inteira neste mês"}
+          </Button>
+        )}
         {previous.isPending ? (
           <p role="status">Carregando equipe anterior…</p>
         ) : previous.isError ? (
@@ -237,7 +303,7 @@ function MonthlyPayroll({ month }: { month: string }) {
                 </div>
                 <Button
                   variant="outline"
-                  disabled={!!form}
+                  disabled={!!form || prepareAll.isPending}
                   onClick={() => {
                     open(undefined, nextPayrollMonth(payroll));
                     setCategory(txn.category_id ?? "");
