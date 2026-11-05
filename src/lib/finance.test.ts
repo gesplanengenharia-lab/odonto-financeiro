@@ -377,3 +377,27 @@ describe("faturamento por competência e caixa em dinheiro/Pix", () => {
     expect(c.entries).toHaveLength(2);
   });
 });
+
+
+it("mantém venda parcelada integral na competência e recebimentos nos meses correspondentes", () => {
+  const rows: Txn[] = buildLaunchRows({kind:"entrada",description:"Venda parcelada",payment_method:"credito",
+    amount:1000,date:"2026-08-10",installments:3},settings,gid).map((r,i) => ({...r,id:`credit-${i}`,
+      status: i === 0 ? "pago" : "pendente", paid_date: i === 0 ? "2026-09-09" : null}));
+  expect(monthBilling(rows,"2026-08").total).toBe(1000);
+  expect(monthBilling(rows,"2026-09").total).toBe(0);
+  expect(monthBilling(rows,"2026-08").byMethod.find(r=>r.method==="credito")?.percent).toBe(100);
+  expect(dashboardMonth(rows,"2026-08","2026-09-10").received).toBe(0);
+  expect(dashboardMonth(rows,"2026-09","2026-09-10").received).toBe(rows[0]!.net_amount);
+  expect(cashPixMonth(rows,"2026-09","2026-09-10").received).toBe(0);
+});
+
+it("separa dinheiro/Pix pendentes e pagamentos de outros meses do caixa selecionado", () => {
+  const rows: Txn[] = buildLaunchRows({kind:"entrada",description:"Pix parcelado",payment_method:"pix",
+    amount:300,date:"2026-08-10",first_due_date:"2026-08-10",installments:3},settings,gid).map((r,i) => ({...r,id:`pix-${i}`,
+      status:i<2?"pago":"pendente",paid_date:i===0?"2026-08-10":i===1?"2026-09-10":null}));
+  expect(monthBilling(rows,"2026-08").total).toBe(300);
+  expect(monthBilling(rows,"2026-09").total).toBe(0);
+  expect(cashPixMonth(rows,"2026-08","2026-09-11").received).toBe(100);
+  expect(cashPixMonth(rows,"2026-09","2026-09-11").received).toBe(100);
+  expect(cashPixMonth(rows,"2026-10","2026-09-11").received).toBe(0);
+});

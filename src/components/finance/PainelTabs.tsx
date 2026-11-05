@@ -20,11 +20,15 @@ export function BillingTab({
   billing,
   history,
   historyLoading,
+  historyError,
+  onRetryHistory,
 }: {
   month: string;
   billing: Billing;
   history: { month: string; billing: Billing }[];
   historyLoading: boolean;
+  historyError: boolean;
+  onRetryHistory: () => void;
 }) {
   const methods = billing.byMethod.filter(
     (r) => r.amount > 0 || history.some((h) => (h.billing.byMethod.find((x) => x.method === r.method)?.amount ?? 0) > 0),
@@ -33,7 +37,7 @@ export function BillingTab({
     <div className="mt-2 space-y-4">
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Total faturado" value={billing.total} tone="primary" hint="Valor bruto pela data do atendimento/venda" />
-        <StatCard label="Já recebido deste faturamento" value={billing.received} tone="income" />
+        <StatCard label="Já recebido deste faturamento" value={billing.received} tone="income" hint="Valor bruto, pela situação atual; pode incluir recebimentos de outros meses" />
         <StatCard label="Ainda a receber deste faturamento" value={billing.pending} tone="warning" hint="Parcelas futuras e pendentes" />
       </div>
 
@@ -75,7 +79,7 @@ export function BillingTab({
                 <tr className="border-t border-border bg-muted/30 font-semibold">
                   <th scope="row" className="px-5 py-3 text-left">Total</th>
                   <td className="tabular px-5 py-3 text-right">{formatBRL(billing.total)}</td>
-                  <td className="tabular px-5 py-3 text-right">100%</td>
+                  <td className="tabular px-5 py-3 text-right">{billing.total > 0 ? "100%" : "—"}</td>
                   <td className="tabular px-5 py-3 text-right">{formatBRL(billing.received)}</td>
                   <td className="tabular px-5 py-3 text-right">{formatBRL(billing.pending)}</td>
                 </tr>
@@ -92,6 +96,11 @@ export function BillingTab({
         </div>
         {historyLoading ? (
           <p className="px-5 pb-5 text-sm text-muted-foreground" role="status">Carregando…</p>
+        ) : historyError ? (
+          <p className="px-5 pb-5 text-sm text-expense" role="alert">
+            Não foi possível carregar o histórico de faturamento.{" "}
+            <button type="button" className="underline" onClick={onRetryHistory}>Tentar novamente</button>
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">
@@ -150,6 +159,12 @@ export function CashPixTab({ month, data }: { month: string; data: CashPix }) {
         />
       </div>
 
+      <p className="text-xs text-muted-foreground">
+        Esta aba destaca dinheiro e Pix recebidos pela data do pagamento. Os demais recebimentos
+        estão na Visão geral. A comparação com as contas usa as despesas cadastradas e não inclui
+        saldo inicial, aportes ou retiradas; não representa o saldo bancário disponível.
+      </p>
+
       <section className="surface-card p-5" aria-labelledby="coverage-title">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="coverage-title" className="text-base font-semibold">Quanto das contas o dinheiro + Pix já cobre</h2>
@@ -204,3 +219,4 @@ export function CashPixTab({ month, data }: { month: string; data: CashPix }) {
     </div>
   );
 }
+

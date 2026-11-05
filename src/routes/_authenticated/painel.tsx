@@ -206,6 +206,8 @@ function Painel() {
                   billing: monthBilling(historyQuery.data ?? [], k),
                 }))}
                 historyLoading={historyQuery.isPending}
+                historyError={historyQuery.isError}
+                onRetryHistory={() => { void historyQuery.refetch(); }}
               />
             </TabsContent>
 
@@ -637,3 +639,4 @@ function Painel() {
     </div>
   );
 }
+
