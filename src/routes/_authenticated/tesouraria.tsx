@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import { ArrowLeftRight, Landmark, Plus, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,10 +34,10 @@ function isISODate(date: string): boolean {
   const parsed = new Date(date + "T00:00:00Z");
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
 }
-function FormField({ label, children }: { label: string; children: React.ReactNode }) {
+function FormField({ label, children }: { label: string; children: ReactNode }) {
   return <label className="grid gap-1.5 text-sm font-medium">{label}{children}</label>;
 }
-function SelectField({ label, value, onChange, children }: { label: string; value: string; onChange: (v: string) => void; children: React.ReactNode }) {
+function SelectField({ label, value, onChange, children }: { label: string; value: string; onChange: (v: string) => void; children: ReactNode }) {
   return <FormField label={label}><select className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm" value={value} onChange={(e) => onChange(e.target.value)}>{children}</select></FormField>;
 }
 const movementKinds: TreasuryKind[] = ["aporte", "retirada", "investimento", "transferencia", "financiamento", "amortizacao"];
