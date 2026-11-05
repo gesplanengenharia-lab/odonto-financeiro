@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  effectivePayment, paymentPatch, txnEditDetails, transactionNoteText, transactionNoteUpdate,
   dashboardDay,
   dashboardIndicators,
   dashboardCosts,
@@ -339,3 +340,54 @@ it("parcela cheque sem taxas e considera atraso na inadimplência", () => {
  expect(rows[6]!.due_date).toBe("2027-04-01");
  expect(isDefaulted(rows[0]!,"2026-11-01")).toBe(true);
 });
+
+describe("pagamento automático e exceções", () => {
+  const row = (patch: Partial<Txn> = {}): Txn => ({ id: "auto", kind: "entrada", description: "Parcela",
+    person: null, category_id: null, nature: null, payment_method: "boleto", status: "pendente",
+    auto_settle: true, competence_date: "2026-08-10", due_date: "2026-09-10", paid_date: null,
+    gross_amount: 100, fee_amount: 0, net_amount: 100, installment_number: 1, installment_total: 2,
+    group_id: "sale", notes: null, ...patch });
+  it("mantém o futuro na previsão e considera recebido no vencimento sem antecipar caixa", () => {
+    const future = effectivePayment(row(), "2026-09-09");
+    expect(future.status).toBe("pendente");
+    expect(dashboardMonth([future], "2026-09", "2026-09-09").received).toBe(0);
+    const paid = effectivePayment(row(), "2026-09-10");
+    expect(paid.status).toBe("pago"); expect(paid.paid_date).toBe("2026-09-10");
+    expect(paid.recorded_status).toBe("pendente");
+    expect(dashboardMonth([paid], "2026-09", "2026-09-10").received).toBe(100);
+    expect(dashboardMonth([paid], "2026-08", "2026-09-10").received).toBe(0);
+  });
+  it("exceções persistem, saem do caixa e voltam à inadimplência", () => {
+    const exception = effectivePayment({ ...row(), ...paymentPatch("pendente", "") }, "2026-11-05");
+    expect(exception.status).toBe("pendente"); expect(exception.paid_date).toBeNull();
+    expect(isDefaulted(exception, "2026-11-05")).toBe(true);
+    expect(effectivePayment(exception, "2027-01-01").status).toBe("pendente");
+    expect(dashboardMonth([exception], "2026-09", "2026-11-05").received).toBe(0);
+  });
+  it("preserva recebimento confirmado e permite informar o recebimento atrasado", () => {
+    const confirmed = effectivePayment({ ...row(), ...paymentPatch("pago", "2026-10-02", "2026-11-05") }, "2026-11-05");
+    expect(confirmed.paid_date).toBe("2026-10-02"); expect(confirmed.automatic_payment).toBe(false);
+    expect(dashboardMonth([confirmed], "2026-09", "2026-11-05").received).toBe(0);
+    expect(dashboardMonth([confirmed], "2026-10", "2026-11-05").received).toBe(100);
+    expect(() => paymentPatch("pago", "2026-11-06", "2026-11-05")).toThrow();
+    expect(() => paymentPatch("pago", "2026-02-30", "2026-11-05")).toThrow();
+  });
+  it("aplica a mesma regra a despesas e pode recalcular após alterar vencimento", () => {
+    const expense = effectivePayment(row({ kind: "saida", nature: "fixa" }), "2026-09-10");
+    expect(dashboardMonth([expense], "2026-09", "2026-09-10").paid).toBe(100);
+    expect(effectivePayment({ ...expense, due_date: "2026-10-10" }, "2026-09-10").status).toBe("pendente");
+  });
+  it("edita uma parcela com líquido consistente sem perder a competência", () => {
+    const updated = txnEditDetails("entrada", { ...row(), gross_amount: 150.50, fee_amount: 5.25 });
+    expect(updated.net_amount).toBe(145.25); expect(updated.competence_date).toBe("2026-08-10");
+    expect(() => txnEditDetails("entrada", { ...row(), fee_amount: 101 })).toThrow();
+  });
+});
+
+ it("preserva metadados importados ao editar observações", () => {
+    const original = JSON.stringify({ source: "essencial-entradas-v1:sheet1:row3", invoice: "Sim" });
+    expect(transactionNoteText(original)).toBe("");
+    const edited = transactionNoteUpdate(original, "Confirmado pelo financeiro");
+    expect(JSON.parse(edited!)).toMatchObject({ source: "essencial-entradas-v1:sheet1:row3", invoice: "Sim", observation: "Confirmado pelo financeiro" });
+    expect(transactionNoteText(edited)).toBe("Confirmado pelo financeiro");
+ });

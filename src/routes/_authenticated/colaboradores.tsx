@@ -168,7 +168,7 @@ function MonthlyPayroll({ month }: { month: string }) {
             .from("transactions")
             .update(payload)
             .eq("id", editing.id)
-            .eq("status", editing.status)
+            .eq("status", editing.recorded_status ?? editing.status)
             .eq("notes", editing.notes ?? "")
             .select("id")
         : await supabase
@@ -249,8 +249,8 @@ function MonthlyPayroll({ month }: { month: string }) {
     <>
       <div className="surface-card mb-4 p-5">
         <p className="text-sm text-muted-foreground">
-          Cada inclusão vale somente para o mês selecionado. Salvar cria uma despesa pendente que já
-          aparece em Contas e no DRE. Faça a baixa em Contas quando pagar. Edite aqui para evitar
+          Cada inclusão vale somente para o mês selecionado. Salvar cria uma despesa que já
+          aparece em Contas e no DRE, considerada paga automaticamente no vencimento. Se não for paga, edite a situação em Contas. Edite aqui para evitar
           lançar a mesma remuneração duas vezes.
         </p>
         <Button className="mt-3" onClick={() => open()} disabled={!!form || prepareAll.isPending}>
@@ -538,7 +538,7 @@ function MonthlyPayroll({ month }: { month: string }) {
                 ? "Despesas classificadas como fixas, incluindo os ajustes mensais informados."
                 : "Despesas classificadas como variáveis."}{" "}
               A edição preserva a data e o status do pagamento. Para retirar um pagamento já
-              baixado, desfaça a baixa em Contas primeiro.
+              registrado como pago, edite a situação em Contas para não pago primeiro.
             </p>
           </section>
         );

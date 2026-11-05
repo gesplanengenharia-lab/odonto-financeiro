@@ -1,6 +1,7 @@
+import { EditTxnDialog } from "./EditTxnDialog";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, Trash2, Undo2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDate, PAYMENT_LABELS, type Txn } from "@/lib/finance";
 import { canUse } from "@/lib/access";
@@ -11,16 +12,7 @@ export function TxnTable({ rows, showFee = false, dateField = "due_date" }: { ro
   const { data: categories = [] } = useQuery(categoriesQuery());
   const catName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? "—";
   const { data: access } = useQuery(myAccessQuery());
-  const { setPaid, remove } = useTxnMutations();
-
-  async function toggle(t: Txn) {
-    try {
-      await setPaid.mutateAsync({ ids: [t.id], paid: t.status !== "pago" });
-      toast.success(t.status === "pago" ? "Marcado como pendente" : "Baixa registrada");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro");
-    }
-  }
+  const { remove } = useTxnMutations();
 
   async function del(t: Txn) {
     const all = t.group_id && t.installment_total > 1 ? confirm("Excluir todas as parcelas deste lançamento? (Cancelar = só esta)") : false;
@@ -81,15 +73,7 @@ export function TxnTable({ rows, showFee = false, dateField = "due_date" }: { ro
                 <Money value={t.kind === "entrada" ? t.net_amount : t.gross_amount} kind={t.kind} />
               </td>
               <td className="whitespace-nowrap px-2 py-3 text-right">
-                {canUse(access, "baixar") && <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={t.status === "pago" ? "Desfazer baixa" : "Dar baixa"}
-                  title={t.status === "pago" ? "Desfazer baixa" : "Dar baixa (pago/recebido)"}
-                  onClick={() => toggle(t)}
-                >
-                  {t.status === "pago" ? <Undo2 /> : <Check className="text-income" />}
-                </Button>}
+                <EditTxnDialog txn={t} />
                 {canUse(access, "excluir") && <Button variant="ghost" size="icon" aria-label="Excluir" title="Excluir" onClick={() => del(t)}>
                   <Trash2 className="text-muted-foreground" />
                 </Button>}

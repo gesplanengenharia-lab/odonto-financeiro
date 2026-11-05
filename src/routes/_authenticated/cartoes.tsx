@@ -1,16 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from "recharts";
-import { canUse } from "@/lib/access";
-import { myAccessQuery } from "@/lib/queries";
 import { pageHead } from "@/lib/head";
 import { addMonths, formatBRL, formatMonth, monthKey, monthRange, nextMonths, todayISO } from "@/lib/finance";
-import { txnsByDueQuery, useTxnMutations } from "@/lib/queries";
+import { txnsByDueQuery } from "@/lib/queries";
 import { TxnTable } from "@/components/finance/TxnTable";
 import { EmptyState, MonthPicker, PageHeader, StatCard } from "@/components/finance/ui";
-import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/cartoes")({
   head: () => pageHead("Cartões", "Recebíveis de cartão de crédito e débito, taxas e datas de recebimento."),
@@ -24,8 +20,6 @@ function Cartoes() {
   const from = `${monthKey(addMonths(`${current}-01`, -12))}-01`;
   const to = monthRange(monthKey(addMonths(`${current}-01`, 12))).end;
   const { data = [], isLoading } = useQuery(txnsByDueQuery(from, to));
-  const { setPaid } = useTxnMutations();
-  const { data: access } = useQuery(myAccessQuery());
 
   const cards = data.filter((t) => t.kind === "entrada" && (t.payment_method === "credito" || t.payment_method === "debito"));
   const pending = cards.filter((t) => t.status === "pendente");
@@ -48,34 +42,16 @@ function Cartoes() {
     [cards, current],
   );
 
-  async function confirmDue() {
-    const byDate = new Map<string, string[]>();
-    due.forEach((t) => byDate.set(t.due_date, [...(byDate.get(t.due_date) ?? []), t.id]));
-    try {
-      for (const [date, ids] of byDate) await setPaid.mutateAsync({ ids, paid: true, date });
-      toast.success(`${due.length} parcela(s) confirmada(s) como recebida(s)`);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro");
-    }
-  }
-
   return (
     <div>
       <PageHeader
         title="Cartões"
         subtitle="Quanto entrou e quanto ainda vai cair na conta, já descontada a taxa da maquininha"
-        actions={
-          due.length > 0 && (
-            <Button onClick={confirmDue} disabled={setPaid.isPending || !canUse(access, "baixar")}>
-              Confirmar {due.length} recebimento(s) até hoje
-            </Button>
-          )
-        }
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="A cair nos próximos meses" value={futureNet} tone="primary" hint="Valor líquido" />
-        <StatCard label="Vencido, não confirmado" value={due.reduce((s, t) => s + t.net_amount, 0)} tone="warning" hint="Confira no extrato" />
+        <StatCard label="Não recebido — exceções" value={due.reduce((s, t) => s + t.net_amount, 0)} tone="warning" hint="Pendências registradas por edição" />
         <StatCard label={`Bruto em ${formatMonth(month)}`} value={monthGross} tone="income" />
         <StatCard label={`Taxas em ${formatMonth(month)}`} value={monthFee} tone="expense" hint={monthGross ? `${((monthFee / monthGross) * 100).toFixed(1).replace(".", ",")}% do bruto` : undefined} />
       </div>

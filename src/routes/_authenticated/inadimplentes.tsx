@@ -1,14 +1,11 @@
+import { EditTxnDialog } from "@/components/finance/EditTxnDialog";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { canUse } from "@/lib/access";
-import { myAccessQuery } from "@/lib/queries";
 import { pageHead } from "@/lib/head";
 import { daysLate, formatBRL, formatDate, isDefaulted, PAYMENT_LABELS, type Txn } from "@/lib/finance";
-import { pendingQuery, useTxnMutations } from "@/lib/queries";
+import { pendingQuery } from "@/lib/queries";
 import { EmptyState, PageHeader, StatCard } from "@/components/finance/ui";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/inadimplentes")({
   head: () => pageHead("Inadimplentes", "Pacientes com boletos e parcelas vencidas."),
@@ -17,8 +14,6 @@ export const Route = createFileRoute("/_authenticated/inadimplentes")({
 
 function Inadimplentes() {
   const { data = [], isLoading } = useQuery(pendingQuery());
-  const { setPaid } = useTxnMutations();
-  const { data: access } = useQuery(myAccessQuery());
   const late = data.filter((t) => isDefaulted(t));
 
   const groups = useMemo(() => {
@@ -40,15 +35,6 @@ function Inadimplentes() {
   const total = late.reduce((s, t) => s + t.gross_amount, 0);
   const over30 = late.filter((t) => daysLate(t.due_date) > 30).reduce((s, t) => s + t.gross_amount, 0);
 
-  async function pay(t: Txn) {
-    try {
-      await setPaid.mutateAsync({ ids: [t.id], paid: true });
-      toast.success("Pagamento registrado");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro");
-    }
-  }
-
   return (
     <div>
       <PageHeader title="Inadimplentes" subtitle="Boletos, Pix e parcelas de pacientes vencidos e não pagos" />
@@ -62,7 +48,7 @@ function Inadimplentes() {
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Carregando…</p>
         ) : groups.length === 0 ? (
-          <EmptyState title="Nenhum paciente inadimplente">Ótimo! Todas as cobranças vencidas estão em dia.</EmptyState>
+          <EmptyState title="Nenhum paciente inadimplente">Nenhuma exceção de não recebimento foi registrada para cobranças vencidas. Para registrar uma, edite o lançamento em Contas.</EmptyState>
         ) : (
           groups.map((g) => (
             <div key={g.person} className="surface-card p-5">
@@ -88,9 +74,7 @@ function Inadimplentes() {
                         venceu {formatDate(t.due_date)} ({daysLate(t.due_date)}d)
                       </span>
                       <span className="tabular font-semibold">{formatBRL(t.gross_amount)}</span>
-                      <Button size="sm" variant="outline" disabled={!canUse(access, "baixar")} onClick={() => pay(t)}>
-                        Recebido
-                      </Button>
+                      <EditTxnDialog txn={t} />
                     </span>
                   </li>
                 ))}

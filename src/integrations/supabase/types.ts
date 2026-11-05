@@ -94,6 +94,7 @@ export type Database = {
       }
       transactions: {
         Row: {
+          auto_settle: boolean
           category_id: string | null
           competence_date: string
           created_at: string
@@ -116,6 +117,7 @@ export type Database = {
           status: string
         }
         Insert: {
+          auto_settle?: boolean
           category_id?: string | null
           competence_date?: string
           created_at?: string
@@ -138,6 +140,7 @@ export type Database = {
           status?: string
         }
         Update: {
+          auto_settle?: boolean
           category_id?: string | null
           competence_date?: string
           created_at?: string

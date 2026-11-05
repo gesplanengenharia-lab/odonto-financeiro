@@ -37,7 +37,7 @@ function Analytics() {
     <div>
       <PageHeader
         title="Analytics de uso"
-        subtitle="Cadastros, lançamentos e contas baixadas a partir dos registros existentes"
+        subtitle="Cadastros, lançamentos e pagamentos considerados a partir dos registros existentes"
       />
       <div className="surface-card mb-4 flex flex-wrap items-end gap-4 p-4">
         <div>
@@ -83,7 +83,7 @@ function Analytics() {
               hint={`${metrics.incoming} entradas · ${metrics.outgoing} saídas (parcelas)`}
             />
             <StatCard
-              label="Contas baixadas"
+              label="Pagamentos considerados"
               value={metrics.settled}
               raw={String(metrics.settled)}
               tone="income"
@@ -113,7 +113,7 @@ function Analytics() {
                   <Legend />
                   <Bar dataKey="registrations" name="Cadastros" fill="var(--chart-3)" />
                   <Bar dataKey="launches" name="Lançamentos" fill="var(--primary)" />
-                  <Bar dataKey="settled" name="Baixas" fill="var(--income)" />
+                  <Bar dataKey="settled" name="Pagamentos" fill="var(--income)" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -125,7 +125,7 @@ function Analytics() {
                   <th className="p-3">Dia</th>
                   <th className="p-3 text-right">Cadastros</th>
                   <th className="p-3 text-right">Lançamentos</th>
-                  <th className="p-3 text-right">Baixas</th>
+                  <th className="p-3 text-right">Pagamentos</th>
                 </tr>
               </thead>
               <tbody>
@@ -148,8 +148,7 @@ function Analytics() {
               como um lançamento; os números não representam cliques ou sessões.
             </p>
             <p>
-              As baixas usam a data de pagamento informada, não o momento do clique. Baixas
-              desfeitas e registros excluídos deixam de aparecer. Este painel mede o estado atual,
+              Os pagamentos usam a data informada ou o vencimento automático. Exceções e registros excluídos deixam de aparecer. Este painel mede o estado atual,
               não é uma trilha imutável de auditoria.
             </p>
             <p>
@@ -159,7 +158,7 @@ function Analytics() {
             {metrics.missingPaidDates > 0 && (
               <p className="text-warning">
                 {metrics.missingPaidDates} conta(s) paga(s) sem data no cadastro não entram na
-                contagem diária de baixas.
+                contagem diária de pagamentos.
               </p>
             )}
           </div>

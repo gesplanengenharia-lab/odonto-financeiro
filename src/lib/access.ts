@@ -3,7 +3,7 @@ export const OPERATIONAL_MODULES = [
   { key: "contas", label: "Contas e vencimentos" },
   { key: "cartoes", label: "Recebíveis de cartões" },
   { key: "inadimplentes", label: "Inadimplentes" },
-  { key: "baixar", label: "Dar e desfazer baixas" },
+  { key: "baixar", label: "Editar situação de pagamentos" },
 ] as const;
 export type OperationalModule = (typeof OPERATIONAL_MODULES)[number]["key"];
 export const DEFAULT_MODULES: OperationalModule[] = OPERATIONAL_MODULES.map((m) => m.key);

@@ -60,7 +60,7 @@ export function StatCard({
   );
 }
 
-export function StatusBadge({ t }: { t: Pick<Txn, "status" | "due_date"> }) {
+export function StatusBadge({ t }: { t: Pick<Txn, "status" | "due_date" | "automatic_payment" | "kind"> }) {
   const overdue = isOverdue(t);
   const cls =
     t.status === "pago"
@@ -68,7 +68,7 @@ export function StatusBadge({ t }: { t: Pick<Txn, "status" | "due_date"> }) {
       : overdue
         ? "bg-expense-soft text-expense"
         : "bg-warning-soft text-warning";
-  const label = t.status === "pago" ? "Pago" : overdue ? "Atrasado" : "Pendente";
+  const label = t.automatic_payment ? (t.kind === "entrada" ? "Recebido automaticamente" : "Pago automaticamente") : t.status === "pago" ? "Pago" : overdue ? "Atrasado" : "Pendente";
   return <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-semibold", cls)}>{label}</span>;
 }
 
@@ -116,3 +116,4 @@ export function Money({ value, kind, className }: { value: number; kind?: "entra
     </span>
   );
 }
+

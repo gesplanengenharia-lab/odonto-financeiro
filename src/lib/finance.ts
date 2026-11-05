@@ -35,6 +35,10 @@ export interface Txn {
   nature: Nature | null;
   payment_method: PaymentMethod;
   status: Status;
+  auto_settle?: boolean;
+  recorded_status?: Status;
+  recorded_paid_date?: string | null;
+  automatic_payment?: boolean;
   competence_date: string;
   due_date: string;
   paid_date: string | null;
@@ -63,7 +67,7 @@ export interface NewLaunchInput {
   notes?: string | null;
 }
 
-export type NewTxnRow = Omit<Txn, "id">;
+export type NewTxnRow = Omit<Txn, "id" | "recorded_status" | "recorded_paid_date" | "automatic_payment">;
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -94,11 +98,29 @@ export function monthKey(iso: string): string {
   return iso.slice(0, 7);
 }
 export function todayISO(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+}
+
+/** Automatic settlement is a planning assumption, not bank reconciliation.
+ * Keep stored fields for optimistic edits; explicit exceptions never auto-settle. */
+export function effectivePayment(t: Txn, today = todayISO()): Txn {
+  const status = t.recorded_status ?? t.status;
+  const paidDate = t.recorded_status !== undefined ? t.recorded_paid_date ?? null : t.paid_date;
+  const automatic = t.auto_settle === true && status === "pendente" && t.due_date <= today;
+  return { ...t, recorded_status: status, recorded_paid_date: paidDate,
+    automatic_payment: automatic, status: automatic ? "pago" : status,
+    paid_date: automatic ? t.due_date : paidDate };
+}
+
+export type PaymentMode = "automatico" | "pendente" | "pago";
+export function paymentPatch(mode: PaymentMode, paidDate: string, today = todayISO()) {
+  if (mode === "pago" && (!/^\d{4}-\d{2}-\d{2}$/.test(paidDate) ||
+      Number.isNaN(Date.parse(paidDate)) || new Date(paidDate).toISOString().slice(0, 10) !== paidDate || paidDate > today))
+    throw new Error("Informe uma data de pagamento válida, até hoje.");
+  return { auto_settle: mode === "automatico", status: mode === "pago" ? "pago" as const : "pendente" as const,
+    paid_date: mode === "pago" ? paidDate : null };
 }
 
 /** Fee % charged by the card machine for a given method / number of installments. */
@@ -406,6 +428,7 @@ export function financialAssistantContext(
       };
     }),
     limites: [
+      "Pagamentos automáticos são considerados realizados no vencimento, salvo exceções editadas. Não são conciliação bancária.",
       "Dados representam o status atual; não são snapshots históricos.",
       "Projeção exclui recebíveis atrasados e inclui despesas anteriores ainda pendentes. Não some saldos projetados de meses diferentes: despesas anteriores podem se repetir.",
       "Saldo bancário inicial não está disponível; não afirme aporte necessário ou saldo bancário.",
@@ -480,4 +503,37 @@ export function payrollTotal(values: PayrollAmounts) {
   const total = cents(values.base) + cents(values.additional) + cents(values.commission) + cents(values.bonus) + cents(values.termination ?? 0) + cents(values.vacation ?? 0) - cents(values.discount);
   if (total < 0) throw new Error("Os descontos não podem superar a remuneração do mês.");
   return total / 100;
+}
+
+export type TxnDetailsInput = Pick<Txn, "description" | "person" | "category_id" | "nature" | "payment_method" | "competence_date" | "due_date" | "gross_amount" | "fee_amount" | "notes">;
+export function txnEditDetails(kind: Kind, data: TxnDetailsInput) {
+  const validDate = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date;
+  if (!data.description.trim() || data.description.length > 500 || (data.person?.length ?? 0) > 200 || (data.notes?.length ?? 0) > 10000)
+    throw new Error("Confira a descrição, o nome e as observações.");
+  if (!validDate(data.competence_date) || !validDate(data.due_date)) throw new Error("Informe datas válidas.");
+  if (![data.gross_amount, data.fee_amount].every(v => Number.isFinite(v) && v >= 0 && v <= 999999999) || data.fee_amount > data.gross_amount)
+    throw new Error("Informe valores válidos; a taxa não pode superar o valor da parcela.");
+  if (!(data.payment_method in PAYMENT_LABELS) || (data.nature !== null && !["fixa", "variavel"].includes(data.nature))) throw new Error("Confira a forma e a natureza.");
+  const gross = round2(data.gross_amount), fee = kind === "entrada" ? round2(data.fee_amount) : 0;
+  return { ...data, description: data.description.trim(), gross_amount: gross, fee_amount: fee,
+    net_amount: round2(gross - fee) };
+}
+
+/** Keep import/payroll metadata out of editable observation text. */
+function managedNotes(notes: string | null): Record<string, unknown> | null {
+  try {
+    const data: unknown = JSON.parse(notes ?? "");
+    if (data && typeof data === "object" && !Array.isArray(data) && "source" in data &&
+      typeof data.source === "string" && (data.source.startsWith("essencial-entradas-v1:") || data.source === "essencial-payroll-v1"))
+      return data as Record<string, unknown>;
+  } catch { /* Ordinary free text. */ }
+  return null;
+}
+export function transactionNoteText(notes: string | null) {
+  const metadata = managedNotes(notes);
+  return metadata ? typeof metadata["observation"] === "string" ? metadata["observation"] : "" : notes ?? "";
+}
+export function transactionNoteUpdate(original: string | null, text: string | null) {
+  const metadata = managedNotes(original);
+  return metadata ? JSON.stringify({ ...metadata, observation: text ?? "" }) : text || null;
 }
