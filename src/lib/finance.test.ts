@@ -365,7 +365,7 @@ describe("faturamento por competência e caixa em dinheiro/Pix", () => {
     const rows = [
       txn({ gross_amount: 500, net_amount: 500 }),
       txn({ payment_method: "dinheiro", gross_amount: 200, net_amount: 200 }),
-      txn({ payment_method: "boleto", gross_amount: 1000, net_amount: 1000 }),
+      txn({ payment_method: "boleto", installment_total: 2, gross_amount: 1000, net_amount: 1000 }),
       txn({ kind: "saida", gross_amount: 300 }),
       txn({ kind: "saida", status: "pendente", paid_date: null, due_date: "2026-11-20", gross_amount: 250 }),
       txn({ kind: "saida", status: "pendente", paid_date: null, due_date: "2026-10-10", gross_amount: 100 }),
@@ -464,4 +464,27 @@ describe("entrada e saldo restante da venda", () => {
       down_payment:{amount:20,payment_method:"dinheiro",paid:true}},settings,()=>"sale");
     expect(plan.rows.map(r=>r.gross_amount)).toEqual([20,26.67,26.67,26.67]);
   });
+});
+
+
+it("inclui boleto em parcela única pelo recebimento e separa parcelas, pendências e meses", () => {
+  const boleto: Txn = {...buildLaunchRows({kind:"entrada", description:"Boleto à vista", payment_method:"boleto",
+    amount:1450, date:"2026-10-15", installments:1, paid:true}, settings, gid)[0]!, id:"vista"};
+  const rows: Txn[] = [boleto,
+    {...boleto,id:"parcela",installment_total:3},
+    {...boleto,id:"outro-mes",paid_date:"2026-09-30"},
+    {...boleto,id:"pendente",status:"pendente",paid_date:null,due_date:"2026-10-25",gross_amount:100,net_amount:100},
+    {...boleto,id:"atrasado",status:"pendente",paid_date:null,due_date:"2026-10-01",gross_amount:200,net_amount:200},
+    {...boleto,id:"parcela-pendente",installment_total:3,status:"pendente",paid_date:null,due_date:"2026-10-25"},
+    {...boleto,id:"despesa",kind:"saida",gross_amount:500,net_amount:500},
+  ];
+  const cash=cashPixMonth(rows,"2026-10","2026-10-20");
+  expect(cash.boletoAvista).toBe(1450);
+  expect(cash.received).toBe(1450);
+  expect(cash.expected).toBe(100);
+  expect(cash.balance).toBe(950);
+  expect(cash.projectedBalance).toBe(1050);
+  expect(cash.coveragePct).toBe(290);
+  expect(cash.entries.map(t=>t.id)).toEqual(["vista"]);
+  expect(dashboardMonth(rows,"2026-10","2026-10-20").received).toBe(2900);
 });

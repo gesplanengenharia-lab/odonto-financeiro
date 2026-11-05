@@ -142,10 +142,11 @@ export function CashPixTab({ month, data }: { month: string; data: CashPix }) {
   const coverage = Math.min(100, data.coveragePct ?? 0);
   return (
     <div className="mt-2 space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard label="Dinheiro recebido" value={data.dinheiro} tone="income" />
         <StatCard label="Pix recebido" value={data.pix} tone="income" />
         <StatCard label="Débito recebido" value={data.debito} tone="income" hint="Valor líquido, já descontadas as taxas" />
+        <StatCard label="Boleto à vista recebido" value={data.boletoAvista} tone="income" hint="Boletos em parcela única, pela data do recebimento" />
         <StatCard
           label="Contas do mês"
           value={data.bills}
@@ -156,26 +157,26 @@ export function CashPixTab({ month, data }: { month: string; data: CashPix }) {
           label={data.balance < 0 ? "Falta para pagar tudo" : "Sobra após pagar tudo"}
           value={data.balance}
           tone={data.balance >= 0 ? "income" : "expense"}
-          hint={`Com o que ainda deve entrar em dinheiro/Pix/débito (${formatBRL(data.expected)}): ${formatBRL(data.projectedBalance)}`}
+          hint={`Com o que ainda deve entrar em dinheiro/Pix/débito/boleto à vista (${formatBRL(data.expected)}): ${formatBRL(data.projectedBalance)}`}
         />
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Esta aba destaca dinheiro, Pix e débito recebidos pela data do pagamento. Os demais recebimentos
+        Esta aba destaca dinheiro, Pix, débito e boleto à vista recebidos pela data do pagamento. Boleto à vista corresponde a boleto em parcela única. Os demais recebimentos
         estão na aba Recebimentos. A comparação com as contas usa as despesas cadastradas e não inclui
         saldo inicial, aportes ou retiradas; não representa o saldo bancário disponível.
       </p>
 
       <section className="surface-card p-5" aria-labelledby="coverage-title">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="coverage-title" className="text-base font-semibold">Quanto das contas o dinheiro + Pix + débito já cobre</h2>
+          <h2 id="coverage-title" className="text-base font-semibold">Quanto das contas o dinheiro + Pix + débito + boleto à vista já cobre</h2>
           <span className="tabular font-semibold">{pct(data.coveragePct)}</span>
         </div>
         <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
           <div className={`h-full ${data.balance >= 0 ? "bg-income" : "bg-warning"}`} style={{ width: `${coverage}%` }} />
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          {formatBRL(data.received)} recebidos em dinheiro, Pix e débito em {formatMonth(month, true)} para{" "}
+          {formatBRL(data.received)} recebidos em dinheiro, Pix, débito e boleto à vista em {formatMonth(month, true)} para{" "}
           {formatBRL(data.bills)} em contas.{" "}
           <Link to="/contas" className="text-primary hover:underline">Ver contas</Link>
         </p>
@@ -183,11 +184,11 @@ export function CashPixTab({ month, data }: { month: string; data: CashPix }) {
 
       <section className="surface-card overflow-hidden" aria-labelledby="cashpix-list-title">
         <div className="p-5">
-          <h2 id="cashpix-list-title" className="text-base font-semibold">Entradas em dinheiro, Pix e débito do mês</h2>
+          <h2 id="cashpix-list-title" className="text-base font-semibold">Entradas à vista do mês</h2>
         </div>
         {data.entries.length === 0 ? (
           <div className="px-5 pb-5">
-            <EmptyState title="Nenhuma entrada em dinheiro, Pix ou débito neste mês" />
+            <EmptyState title="Nenhuma entrada em dinheiro, Pix, débito ou boleto à vista neste mês" />
           </div>
         ) : (
           <div className="overflow-x-auto">

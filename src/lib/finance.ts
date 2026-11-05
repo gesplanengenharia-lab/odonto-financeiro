@@ -351,16 +351,22 @@ export function monthBilling(txns: Txn[], month: string) {
 
 export const LIQUID_METHODS: PaymentMethod[] = ["dinheiro", "pix", "debito"];
 
-/** Dinheiro + Pix + debit received in the month (by payment date) is the money used to
+const isLiquidEntry = (t: Txn) =>
+  LIQUID_METHODS.includes(t.payment_method) ||
+  (t.payment_method === "boleto" && t.installment_total === 1);
+
+/** Cash, Pix, debit and single-payment boleto received in the month (by payment date)
  * pay the month's bills: paid + open bills of the month + older open bills. */
 export function cashPixMonth(txns: Txn[], month: string, today = todayISO()) {
   const m = dashboardMonth(txns, month, today);
-  const pick = (method: PaymentMethod) => m.byMethod.find((r) => r.method === method)!;
+  const liquid = dashboardMonth(txns.filter(isLiquidEntry), month, today);
+  const pick = (method: PaymentMethod) => liquid.byMethod.find((r) => r.method === method)!;
   const dinheiro = pick("dinheiro").received;
   const pix = pick("pix").received;
   const debito = pick("debito").received;
-  const received = round2(dinheiro + pix + debito);
-  const expected = round2(pick("dinheiro").expected + pick("pix").expected + pick("debito").expected);
+  const boletoAvista = pick("boleto").received;
+  const received = liquid.received;
+  const expected = liquid.toReceive;
   const billsOpen = round2(m.toPay + m.priorToPay);
   const bills = round2(m.paid + billsOpen);
   const { start, end } = monthRange(month);
@@ -369,7 +375,7 @@ export function cashPixMonth(txns: Txn[], month: string, today = todayISO()) {
       (t) =>
         t.kind === "entrada" &&
         t.status === "pago" &&
-        LIQUID_METHODS.includes(t.payment_method) &&
+        isLiquidEntry(t) &&
         (t.paid_date || t.due_date) >= start &&
         (t.paid_date || t.due_date) <= end,
     )
@@ -378,6 +384,7 @@ export function cashPixMonth(txns: Txn[], month: string, today = todayISO()) {
     dinheiro,
     pix,
     debito,
+    boletoAvista,
     received,
     expected,
     billsPaid: m.paid,

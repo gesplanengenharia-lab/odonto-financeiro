@@ -119,7 +119,7 @@ describe("Painel e simulação", () => {
     const tabs = [
       ["Faturamento", "Faturamento por forma de pagamento"],
       ["Recebimentos", "Recebimentos por forma de pagamento"],
-      ["Dinheiro, Pix e débito", "Entradas em dinheiro, Pix e débito do mês"],
+      ["Entradas à vista", "Entradas à vista do mês"],
       ["DRE e custos", "Onde estão os custos do mês"],
       ["Fechamento diário", "Fechamento diário — conferência"],
     ];
@@ -134,8 +134,8 @@ describe("Painel e simulação", () => {
   });
   it("abre os recebimentos e dinheiro/Pix diretamente pelos atalhos do resumo", () => {
     render(<Panel />);
-    fireEvent.click(screen.getByRole("button", { name: "Dinheiro, Pix e débito recebidos" }));
-    expect(screen.getByRole("tab", { name: "Dinheiro, Pix e débito" })).toHaveAttribute(
+    fireEvent.click(screen.getByRole("button", { name: "Entradas à vista recebidas" }));
+    expect(screen.getByRole("tab", { name: "Entradas à vista" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
