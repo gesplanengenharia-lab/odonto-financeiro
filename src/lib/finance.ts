@@ -1,7 +1,7 @@
 // Pure finance rules for the clinic. No I/O here so it can be tested.
 
 export type Kind = "entrada" | "saida";
-export type PaymentMethod = "dinheiro" | "pix" | "debito" | "credito" | "boleto" | "transferencia";
+export type PaymentMethod = "dinheiro" | "pix" | "debito" | "credito" | "boleto" | "transferencia" | "cheque";
 export type Status = "pago" | "pendente";
 export type Nature = "fixa" | "variavel";
 
@@ -12,6 +12,7 @@ export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   credito: "Cartão de crédito",
   boleto: "Boleto",
   transferencia: "Transferência",
+  cheque: "Cheque",
 };
 
 export const NATURE_LABELS: Record<Nature, string> = { fixa: "Fixa", variavel: "Variável" };

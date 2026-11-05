@@ -246,7 +246,7 @@ describe("dashboard mensal", () => {
     expect(m.received).toBe(0);
     expect(m.toPay).toBe(0);
     expect(m.projected).toBe(0);
-    expect(m.byMethod).toHaveLength(6);
+    expect(m.byMethod).toHaveLength(7);
     expect(m.cashDre.margin).toBe(0);
   });
 });
@@ -330,4 +330,12 @@ describe("indicadores e composição de custos", () => {
     expect(costs[2]!.rows[0]!.name).toBe("Sem categoria");
     expect(costs.reduce((sum,g)=>sum+g.amount,0)).toBe(summarize(rows).totalExpenses);
   });
+});
+
+it("parcela cheque sem taxas e considera atraso na inadimplência", () => {
+ const rows=buildLaunchRows({kind:"entrada",description:"Cheque",payment_method:"cheque",amount:3500,date:"2026-09-11",first_due_date:"2026-10-01",installments:7},settings,gid);
+ expect(rows).toHaveLength(7);
+ expect(rows.every(r=>r.gross_amount===500 && r.fee_amount===0 && r.status==="pendente")).toBe(true);
+ expect(rows[6]!.due_date).toBe("2027-04-01");
+ expect(isDefaulted(rows[0]!,"2026-11-01")).toBe(true);
 });

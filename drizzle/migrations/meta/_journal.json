@@ -15,6 +15,13 @@
       "when": 1793826665219,
       "tag": "0001_team_module_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793826665220,
+      "tag": "0002_cheque_payment_method",
+      "breakpoints": true
     }
   ]
 }
