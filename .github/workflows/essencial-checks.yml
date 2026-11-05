@@ -14,14 +14,18 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.19.0'
+          run_install: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - name: Instalar dependências
-        run: npm install --no-audit --no-fund
+        run: pnpm install --no-frozen-lockfile
       - name: Validar TypeScript
-        run: npx tsc --noEmit
+        run: pnpm exec tsc --noEmit
       - name: Executar testes
-        run: npm test
+        run: pnpm test
       - name: Compilar aplicação
-        run: npm run build
+        run: pnpm run build
