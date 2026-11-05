@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Check, Trash2, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { formatDate, PAYMENT_LABELS, type Txn } from "@/lib/finance";
+import { formatDate, isDefaulted, PAYMENT_LABELS, type Txn } from "@/lib/finance";
 import { canUse } from "@/lib/access";
 import { categoriesQuery, myAccessQuery, useTxnMutations } from "@/lib/queries";
 import { KindBadge, Money, StatusBadge } from "./ui";
@@ -16,7 +16,11 @@ export function TxnTable({ rows, showFee = false, dateField = "due_date" }: { ro
   async function toggle(t: Txn) {
     try {
       await setPaid.mutateAsync({ ids: [t.id], paid: t.status !== "pago" });
-      toast.success(t.status === "pago" ? "Marcado como pendente" : "Baixa registrada");
+      toast.success(t.kind === "entrada" && t.payment_method === "boleto" && t.status === "pago"
+        ? isDefaulted({ ...t, status: "pendente" })
+          ? "Marcado como inadimplente. Consulte a aba Inadimplentes."
+          : "Marcado como pendente; aparecerá em Inadimplentes após o vencimento."
+        : t.status === "pago" ? "Marcado como pendente" : "Baixa registrada");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
     }
@@ -83,12 +87,14 @@ export function TxnTable({ rows, showFee = false, dateField = "due_date" }: { ro
               <td className="whitespace-nowrap px-2 py-3 text-right">
                 {canUse(access, "baixar") && <Button
                   variant="ghost"
-                  size="icon"
-                  aria-label={t.status === "pago" ? "Desfazer baixa" : "Dar baixa"}
+                  size={t.kind === "entrada" && t.payment_method === "boleto" && t.status === "pago" ? "sm" : "icon"}
+                  aria-label={t.kind === "entrada" && t.payment_method === "boleto" && t.status === "pago" ? "Marcar boleto como não recebido" : t.status === "pago" ? "Desfazer baixa" : "Dar baixa"}
                   title={t.status === "pago" ? "Desfazer baixa" : "Dar baixa (pago/recebido)"}
+                  disabled={setPaid.isPending}
                   onClick={() => toggle(t)}
                 >
                   {t.status === "pago" ? <Undo2 /> : <Check className="text-income" />}
+                  {t.kind === "entrada" && t.payment_method === "boleto" && t.status === "pago" && "Não recebido"}
                 </Button>}
                 {canUse(access, "excluir") && <Button variant="ghost" size="icon" aria-label="Excluir" title="Excluir" onClick={() => del(t)}>
                   <Trash2 className="text-muted-foreground" />

@@ -4,6 +4,7 @@ import {
   monthBilling,
   cashPixMonth,
   boletoReceivables,
+  defaultedReceivables,
   dashboardIndicators,
   dashboardCosts,
   dashboardMonth,
@@ -510,4 +511,20 @@ it("agenda de boletos separa pagamento, vencimento e pendências durante 24 mese
   expect(a.projection[23]).toEqual({month:"2028-09",amount:300,count:1});
   expect(boletoReceivables(rows,"2027-01","2026-10-05").open).toBe(200);
   expect(boletoReceivables([],"2026-10").projection.every(row=>row.amount===0&&row.count===0)).toBe(true);
+});
+
+it("inadimplência mensal acompanha a baixa desfeita sem duplicar ou antecipar parcelas", () => {
+  const paid: Txn = {...buildLaunchRows({kind:"entrada",description:"Boleto",person:"Paciente A",payment_method:"boleto",
+    amount:150,date:"2026-10-15",installments:1,paid:true},settings,gid)[0]!,id:"a"};
+  const undone={...paid,status:"pendente" as const,paid_date:null};
+  const rows: Txn[] = [undone,{...undone,id:"b",person:"Paciente B",due_date:"2026-09-15",gross_amount:200},
+    {...undone,id:"today",due_date:"2026-11-05"},{...undone,id:"future",due_date:"2026-12-05"},
+    {...undone,id:"expense",kind:"saida"},{...undone,id:"card",payment_method:"credito"}];
+  expect(defaultedReceivables([paid],"2026-10",false,"2026-11-05").total).toBe(0);
+  const a=defaultedReceivables(rows,"2026-10",false,"2026-11-05");
+  expect(a.total).toBe(350);expect(a.monthTotal).toBe(150);expect(a.groups).toHaveLength(2);
+  const m=defaultedReceivables(rows,"2026-10",true,"2026-11-05");
+  expect(m.groups.map(g=>g.person)).toEqual(["Paciente A"]);expect(m.groups[0]!.total).toBe(150);
+  expect(defaultedReceivables(rows,"2026-09",true,"2026-11-05").monthTotal).toBe(200);
+  expect(defaultedReceivables([paid,...rows.slice(1)],"2026-10",true,"2026-11-05").groups).toHaveLength(0);
 });

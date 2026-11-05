@@ -196,6 +196,29 @@ export function daysLate(due: string, today = todayISO()) {
   return Math.max(0, Math.round((parseISO(today).getTime() - parseISO(due).getTime()) / 86400000));
 }
 
+/** Outstanding default follows the original due month, never the sale month. */
+export function defaultedReceivables(txns: Txn[], month: string, onlyMonth = false, today = todayISO()) {
+  const late = txns.filter((t) => isDefaulted(t, today));
+  const total = (rows: Txn[]) => round2(rows.reduce((sum, t) => sum + Number(t.gross_amount), 0));
+  const monthRows = late.filter((t) => monthKey(t.due_date) === month);
+  const rows = onlyMonth ? monthRows : late;
+  const map = new Map<string, Txn[]>();
+  rows.forEach((t) => {
+    const person = t.person?.trim() || "Sem paciente informado";
+    map.set(person, [...(map.get(person) ?? []), t]);
+  });
+  const groups = [...map.entries()].map(([person, items]) => ({
+    person, rows: items, total: total(items),
+    maxDays: Math.max(...items.map((t) => daysLate(t.due_date, today))),
+  })).sort((a, b) => b.total - a.total);
+  return {
+    groups,
+    total: total(late),
+    monthTotal: total(monthRows),
+    over30: total(rows.filter((t) => daysLate(t.due_date, today) > 30)),
+  };
+}
+
 export interface Summary {
   grossRevenue: number;
   cardFees: number;

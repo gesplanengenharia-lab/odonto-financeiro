@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { canUse } from "@/lib/access";
 import { myAccessQuery } from "@/lib/queries";
 import { pageHead } from "@/lib/head";
-import { daysLate, formatBRL, formatDate, isDefaulted, PAYMENT_LABELS, type Txn } from "@/lib/finance";
+import { daysLate, defaultedReceivables, formatBRL, formatDate, formatMonth, monthKey, PAYMENT_LABELS, todayISO, type Txn } from "@/lib/finance";
 import { pendingQuery, useTxnMutations } from "@/lib/queries";
-import { EmptyState, PageHeader, StatCard } from "@/components/finance/ui";
+import { EmptyState, MonthPicker, PageHeader, StatCard } from "@/components/finance/ui";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -16,29 +16,15 @@ export const Route = createFileRoute("/_authenticated/inadimplentes")({
 });
 
 function Inadimplentes() {
-  const { data = [], isLoading } = useQuery(pendingQuery());
+  const today = todayISO();
+  const [month, setMonth] = useState(monthKey(today));
+  const [onlyMonth, setOnlyMonth] = useState(false);
+  const { data = [], isLoading, isError, refetch } = useQuery(pendingQuery());
   const { setPaid } = useTxnMutations();
   const { data: access } = useQuery(myAccessQuery());
-  const late = data.filter((t) => isDefaulted(t));
-
-  const groups = useMemo(() => {
-    const map = new Map<string, Txn[]>();
-    late.forEach((t) => {
-      const k = t.person?.trim() || "Sem paciente informado";
-      map.set(k, [...(map.get(k) ?? []), t]);
-    });
-    return [...map.entries()]
-      .map(([person, rows]) => ({
-        person,
-        rows,
-        total: rows.reduce((s, t) => s + t.gross_amount, 0),
-        maxDays: Math.max(...rows.map((t) => daysLate(t.due_date))),
-      }))
-      .sort((a, b) => b.total - a.total);
-  }, [late]);
-
-  const total = late.reduce((s, t) => s + t.gross_amount, 0);
-  const over30 = late.filter((t) => daysLate(t.due_date) > 30).reduce((s, t) => s + t.gross_amount, 0);
+  const { groups, total, monthTotal, over30 } = useMemo(
+    () => defaultedReceivables(data, month, onlyMonth, today), [data, month, onlyMonth, today],
+  );
 
   async function pay(t: Txn) {
     try {
@@ -51,18 +37,22 @@ function Inadimplentes() {
 
   return (
     <div>
-      <PageHeader title="Inadimplentes" subtitle="Boletos, Pix e parcelas de pacientes vencidos e não pagos" />
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Total em atraso" value={total} tone="expense" />
-        <StatCard label="Atraso acima de 30 dias" value={over30} tone="warning" />
-        <StatCard label="Pacientes" value={groups.length} raw={String(groups.length)} tone="primary" />
+      <PageHeader title="Inadimplentes" subtitle="Boletos, Pix e parcelas de pacientes vencidos e não pagos"
+        actions={<><MonthPicker value={month} onChange={setMonth} /><Button variant="outline" aria-pressed={onlyMonth} onClick={() => setOnlyMonth(!onlyMonth)}>{onlyMonth ? "Mostrar todos os meses" : "Somente mês selecionado"}</Button></>} />
+      <p className="mb-4 text-sm text-muted-foreground">Ao desfazer a baixa de uma cobrança vencida, ela aparece aqui automaticamente com o paciente e o valor. O mês considera o vencimento, não a data da venda.</p>
+      {isLoading ? <p role="status">Carregando…</p> : isError ? <div className="surface-card p-6"><p role="alert">Não foi possível carregar os inadimplentes.</p><Button className="mt-3" variant="outline" onClick={() => void refetch()}>Tentar novamente</Button></div> : <>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Total em atraso — todos os meses" value={total} tone="expense" />
+        <StatCard label={`Inadimplência em ${formatMonth(month)}`} value={monthTotal} tone="expense" hint="Vencidas nesse mês e ainda não recebidas" />
+        <StatCard label="Atraso acima de 30 dias" value={over30} tone="warning" hint={onlyMonth ? "No mês selecionado" : "Todos os meses"} />
+        <StatCard label={onlyMonth ? "Pacientes do mês" : "Pacientes — todos os meses"} value={groups.length} raw={String(groups.length)} tone="primary" />
       </div>
 
-      <div className="mt-6 grid gap-4">
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground">Carregando…</p>
-        ) : groups.length === 0 ? (
-          <EmptyState title="Nenhum paciente inadimplente">Ótimo! Todas as cobranças vencidas estão em dia.</EmptyState>
+      <h2 className="mt-6 text-lg font-semibold">{onlyMonth ? `Pacientes com vencimentos em ${formatMonth(month, true)}` : "Pacientes com valores em atraso — todos os meses"}</h2>
+      <div className="mt-3 grid gap-4">
+        {groups.length === 0 ? (
+          <EmptyState title="Nenhum paciente inadimplente">{onlyMonth ? "Nenhuma cobrança vencida e pendente no mês selecionado." : "Todas as cobranças vencidas estão em dia."}</EmptyState>
         ) : (
           groups.map((g) => (
             <div key={g.person} className="surface-card p-5">
@@ -99,6 +89,7 @@ function Inadimplentes() {
           ))
         )}
       </div>
+      </>}
     </div>
   );
 }
