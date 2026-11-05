@@ -1,11 +1,13 @@
+import { useFinancialMonth } from "@/hooks/use-financial-month";
+import { QueryFeedback } from "@/components/finance/QueryFeedback";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { pageHead } from "@/lib/head";
-import { cashValue, formatBRL, formatMonth, monthKey, monthRange, nextMonths, todayISO } from "@/lib/finance";
+import { cashFlowProjection, formatBRL, formatMonth, nextMonths } from "@/lib/finance";
 import { txnsByDueQuery } from "@/lib/queries";
-import { PageHeader, StatCard } from "@/components/finance/ui";
+import { MonthPicker, PageHeader, StatCard } from "@/components/finance/ui";
 import { NativeSelect } from "@/components/finance/LaunchDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,28 +18,15 @@ export const Route = createFileRoute("/_authenticated/provisao")({
 });
 
 function Provisao() {
-  const current = monthKey(todayISO());
+  const [current, setMonth] = useFinancialMonth();
   const [months, setMonths] = useState(6);
   const [opening, setOpening] = useState("");
   const keys = nextMonths(current, months);
-  const from = `${current}-01`;
-  const to = monthRange(keys[keys.length - 1]!).end;
-  const { data = [] } = useQuery(txnsByDueQuery(from, to));
+  const query = useQuery(txnsByDueQuery());
+  const data = query.data ?? [];
   const openingValue = Number(opening.replace(/\./g, "").replace(",", ".")) || 0;
 
-  const table = useMemo(() => {
-    let balance = openingValue;
-    return keys.map((k) => {
-      const rows = data.filter((t) => monthKey(t.due_date) === k && t.status === "pendente");
-      const card = rows.filter((t) => t.kind === "entrada" && (t.payment_method === "credito" || t.payment_method === "debito")).reduce((s, t) => s + cashValue(t), 0);
-      const other = rows.filter((t) => t.kind === "entrada" && t.payment_method !== "credito" && t.payment_method !== "debito").reduce((s, t) => s + cashValue(t), 0);
-      const fixed = rows.filter((t) => t.kind === "saida" && t.nature === "fixa").reduce((s, t) => s + cashValue(t), 0);
-      const variable = rows.filter((t) => t.kind === "saida" && t.nature !== "fixa").reduce((s, t) => s + cashValue(t), 0);
-      const result = card + other - fixed - variable;
-      balance += result;
-      return { key: k, mes: formatMonth(k), card, other, fixed, variable, result, balance: Math.round(balance * 100) / 100 };
-    });
-  }, [data, keys.join(","), openingValue]);
+  const table = useMemo(() => cashFlowProjection(data, current, months, openingValue), [data, current, months, openingValue]);
 
   const totIn = table.reduce((s, r) => s + r.card + r.other, 0);
   const totOut = table.reduce((s, r) => s + r.fixed + r.variable, 0);
@@ -46,11 +35,12 @@ function Provisao() {
     <div>
       <PageHeader
         title="Provisão"
-        subtitle="O que ainda vai entrar e sair (lançamentos pendentes), mês a mês"
+        subtitle="Fluxo de caixa por mês: realizado e previsto, com o mesmo critério da simulação"
         actions={
-          <div className="flex items-end gap-2">
+          <div className="flex flex-wrap items-end gap-2">
+            <MonthPicker value={current} onChange={setMonth} />
             <div className="grid gap-1">
-              <Label htmlFor="op" className="text-xs">Saldo atual em conta (R$)</Label>
+              <Label htmlFor="op" className="text-xs">Saldo inicial do mês (R$)</Label>
               <Input id="op" className="w-40 bg-card" inputMode="decimal" placeholder="0,00" value={opening} onChange={(e) => setOpening(e.target.value)} />
             </div>
             <NativeSelect className="w-36" value={months} onChange={(e) => setMonths(Number(e.target.value))}>
@@ -62,9 +52,10 @@ function Provisao() {
         }
       />
 
+      <QueryFeedback loading={query.isPending} error={query.isError} retry={() => void query.refetch()}>
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Entradas previstas" value={totIn} tone="income" />
-        <StatCard label="Saídas previstas" value={totOut} tone="expense" />
+        <StatCard label="Entradas realizadas + previstas" value={totIn} tone="income" />
+        <StatCard label="Saídas realizadas + previstas" value={totOut} tone="expense" />
         <StatCard label={`Saldo projetado em ${formatMonth(keys[keys.length - 1]!)}`} value={table[table.length - 1]?.balance ?? 0} tone="primary" />
       </div>
 
@@ -118,8 +109,9 @@ function Provisao() {
         </table>
       </div>
       <p className="mt-3 text-xs text-muted-foreground">
-        Dica: cadastre despesas fixas (aluguel, salários) com “Repetir todo mês” para que apareçam aqui. Contas atrasadas de meses anteriores ficam em Contas a pagar e receber.
+        Projeção com base no saldo informado no início do mês selecionado. Inclui recebimentos e pagamentos realizados, entradas pendentes ainda a vencer e despesas em aberto. Contas antigas a pagar entram uma única vez; recebíveis vencidos não são antecipados. Não representa saldo bancário conciliado.
       </p>
+      </QueryFeedback>
     </div>
   );
 }

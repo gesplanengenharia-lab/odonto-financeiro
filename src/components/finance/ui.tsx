@@ -91,7 +91,10 @@ export function MonthPicker({ value, onChange }: { value: string; onChange: (v: 
       <Button variant="ghost" size="icon" aria-label="Mês anterior" onClick={() => onChange(monthKey(addMonths(`${value}-01`, -1)))}>
         <ChevronLeft />
       </Button>
-      <span className="min-w-36 text-center text-sm font-semibold capitalize">{formatMonth(value, true)}</span>
+      <label className="relative min-w-36 cursor-pointer rounded-lg px-2 py-2 text-center text-sm font-semibold capitalize focus-within:ring-2 focus-within:ring-ring">
+        {formatMonth(value, true)}
+        <input type="month" aria-label="Selecionar mês" value={value} onChange={(e) => { if (/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value)) onChange(e.target.value); }} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+      </label>
       <Button variant="ghost" size="icon" aria-label="Próximo mês" onClick={() => onChange(monthKey(addMonths(`${value}-01`, 1)))}>
         <ChevronRight />
       </Button>

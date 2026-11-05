@@ -1,3 +1,4 @@
+import { useFinancialMonth } from "@/hooks/use-financial-month";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
@@ -28,7 +29,7 @@ export const Route = createFileRoute("/_authenticated/colaboradores")({
   component: Colaboradores,
 });
 function Colaboradores() {
-  const [month, setMonth] = useState(monthKey(todayISO()));
+  const [month, setMonth] = useFinancialMonth();
   return (
     <div>
       <PageHeader

@@ -1,3 +1,4 @@
+import { QueryFeedback } from "@/components/finance/QueryFeedback";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -18,10 +19,11 @@ function Contas() {
   const [tab, setTab] = useState<"entrada" | "saida">("saida");
   const [period, setPeriod] = useState("todos");
   const [method, setMethod] = useState("");
-  const { data = [], isLoading } = useQuery(pendingQuery());
+  const query = useQuery(pendingQuery());
+  const { data = [], isLoading } = query;
   const today = todayISO();
 
-  const ofKind = data.filter((t) => t.kind === tab && (tab === "saida" || (t.payment_method !== "credito" && t.payment_method !== "debito")));
+  const ofKind = data.filter((t) => (!method || t.payment_method === method) && t.kind === tab && (tab === "saida" || (t.payment_method !== "credito" && t.payment_method !== "debito")));
   const rows = ofKind.filter((t) => {
     if (method && t.payment_method !== method) return false;
     if (period === "atrasados") return isOverdue(t, today);
@@ -35,9 +37,10 @@ function Contas() {
     <div>
       <PageHeader
         title="Contas a pagar e receber"
-        subtitle="Tudo que está pendente, com vencimento. Clique no ✓ para dar baixa."
+        subtitle="Despesas e recebíveis pendentes, organizados pelo vencimento"
         actions={<LaunchDialog defaultKind={tab} />}
       />
+      <QueryFeedback loading={query.isPending} error={query.isError} retry={() => void query.refetch()}>
       <Tabs value={tab} onValueChange={(v) => setTab(v as "entrada" | "saida")} className="mb-4">
         <TabsList>
           <TabsTrigger value="saida">A pagar</TabsTrigger>
@@ -52,13 +55,13 @@ function Contas() {
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
-        <NativeSelect className="w-48" value={period} onChange={(e) => setPeriod(e.target.value)}>
+        <NativeSelect aria-label="Filtrar vencimentos" className="w-48" value={period} onChange={(e) => setPeriod(e.target.value)}>
           <option value="todos">Todos os vencimentos</option>
           <option value="atrasados">Atrasados</option>
           <option value="7">Próximos 7 dias</option>
           <option value="30">Próximos 30 dias</option>
         </NativeSelect>
-        <NativeSelect className="w-48" value={method} onChange={(e) => setMethod(e.target.value)}>
+        <NativeSelect aria-label="Filtrar forma de pagamento" className="w-48" value={method} onChange={(e) => setMethod(e.target.value)}>
           <option value="">Todas as formas</option>
           {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((m) => (
             <option key={m} value={m}>
@@ -77,6 +80,7 @@ function Contas() {
       ) : (
         <TxnTable rows={rows} />
       )}
+      </QueryFeedback>
     </div>
   );
 }

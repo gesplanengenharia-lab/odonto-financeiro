@@ -1,12 +1,14 @@
+import { QueryFeedback } from "@/components/finance/QueryFeedback";
+import { useFinancialMonth } from "@/hooks/use-financial-month";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from "recharts";
 import { canUse } from "@/lib/access";
 import { myAccessQuery } from "@/lib/queries";
 import { pageHead } from "@/lib/head";
-import { addMonths, formatBRL, formatMonth, monthKey, monthRange, nextMonths, todayISO } from "@/lib/finance";
+import { cardReceivables, formatBRL, formatMonth, todayISO } from "@/lib/finance";
 import { txnsByDueQuery, useTxnMutations } from "@/lib/queries";
 import { TxnTable } from "@/components/finance/TxnTable";
 import { EmptyState, MonthPicker, PageHeader, StatCard } from "@/components/finance/ui";
@@ -19,34 +21,16 @@ export const Route = createFileRoute("/_authenticated/cartoes")({
 
 function Cartoes() {
   const today = todayISO();
-  const current = monthKey(today);
-  const [month, setMonth] = useState(current);
-  const from = `${monthKey(addMonths(`${current}-01`, -12))}-01`;
-  const to = monthRange(monthKey(addMonths(`${current}-01`, 12))).end;
-  const { data = [], isLoading } = useQuery(txnsByDueQuery(from, to));
+  const [month, setMonth] = useFinancialMonth();
+  const query = useQuery(txnsByDueQuery());
+  const { data = [], isLoading } = query;
   const { setPaid } = useTxnMutations();
   const { data: access } = useQuery(myAccessQuery());
 
-  const cards = data.filter((t) => t.kind === "entrada" && (t.payment_method === "credito" || t.payment_method === "debito"));
-  const pending = cards.filter((t) => t.status === "pendente");
-  const due = pending.filter((t) => t.due_date <= today);
-  const futureNet = pending.filter((t) => t.due_date > today).reduce((s, t) => s + t.net_amount, 0);
-  const monthRows = cards.filter((t) => monthKey(t.due_date) === month);
-  const monthGross = monthRows.reduce((s, t) => s + t.gross_amount, 0);
-  const monthFee = monthRows.reduce((s, t) => s + t.fee_amount, 0);
-
-  const projection = useMemo(
-    () =>
-      nextMonths(current, 12).map((k) => {
-        const rows = cards.filter((t) => monthKey(t.due_date) === k);
-        return {
-          mes: formatMonth(k),
-          Líquido: Math.round(rows.reduce((s, t) => s + t.net_amount, 0) * 100) / 100,
-          Taxas: Math.round(rows.reduce((s, t) => s + t.fee_amount, 0) * 100) / 100,
-        };
-      }),
-    [cards, current],
-  );
+  const agenda = useMemo(() => cardReceivables(data, month, today), [data, month, today]);
+  const monthRows = agenda.monthRows;
+  const due = data.filter((t) => t.kind === "entrada" && (t.payment_method === "credito" || t.payment_method === "debito") && t.status === "pendente" && t.due_date <= today);
+  const projection = agenda.projection.map((r) => ({mes: formatMonth(r.month), Líquido: r.amount}));
 
   async function confirmDue() {
     const byDate = new Map<string, string[]>();
@@ -65,23 +49,26 @@ function Cartoes() {
         title="Cartões"
         subtitle="Quanto entrou e quanto ainda vai cair na conta, já descontada a taxa da maquininha"
         actions={
-          due.length > 0 && (
+          <><MonthPicker value={month} onChange={setMonth} />{due.length > 0 && (
             <Button onClick={confirmDue} disabled={setPaid.isPending || !canUse(access, "baixar")}>
               Confirmar {due.length} recebimento(s) até hoje
             </Button>
-          )
+          )}</>
         }
       />
 
+      <QueryFeedback loading={query.isPending} error={query.isError} retry={() => void query.refetch()}>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="A cair nos próximos meses" value={futureNet} tone="primary" hint="Valor líquido" />
-        <StatCard label="Vencido, não confirmado" value={due.reduce((s, t) => s + t.net_amount, 0)} tone="warning" hint="Confira no extrato" />
-        <StatCard label={`Bruto em ${formatMonth(month)}`} value={monthGross} tone="income" />
-        <StatCard label={`Taxas em ${formatMonth(month)}`} value={monthFee} tone="expense" hint={monthGross ? `${((monthFee / monthGross) * 100).toFixed(1).replace(".", ",")}% do bruto` : undefined} />
+        <StatCard label={`Recebido em ${formatMonth(month)}`} value={agenda.received} tone="income" hint="Líquido, pela data do recebimento" />
+        <StatCard label={`Em aberto em ${formatMonth(month)}`} value={agenda.open} tone="primary" hint="Por vencimento, incluindo atrasados do mês" />
+        <StatCard label="A receber nos 23 meses seguintes" value={agenda.future} tone="primary" hint="Somente parcelas pendentes, após o mês selecionado" />
+        <StatCard label="Recebimentos atrasados" value={agenda.overdue} tone="warning" hint="Pendentes com vencimento até ontem, todos os meses" />
       </div>
 
       <div className="surface-card mt-4 p-6">
-        <h2 className="text-base font-semibold">Agenda de recebíveis — próximos 12 meses</h2>
+        <h2 className="text-base font-semibold">Agenda de recebíveis — 24 meses</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Mês selecionado e 23 seguintes. Somente parcelas em aberto, já descontadas as taxas.</p>
+        <p className="mt-2 text-xs text-muted-foreground">Vencimentos de {formatMonth(month)}, pagos e pendentes: {formatBRL(agenda.monthGross)} brutos · {formatBRL(agenda.monthFees)} em taxas.</p>
         <div className="mt-4 h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={projection}>
@@ -91,7 +78,7 @@ function Cartoes() {
               <Tooltip formatter={(v: number) => formatBRL(v)} />
               <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="Líquido" stackId="a" fill="var(--primary)" />
-              <Bar dataKey="Taxas" stackId="a" fill="var(--expense)" radius={[4, 4, 0, 0]} />
+
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -99,7 +86,6 @@ function Cartoes() {
 
       <div className="mb-3 mt-8 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">Parcelas por data de recebimento</h2>
-        <MonthPicker value={month} onChange={setMonth} />
       </div>
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Carregando…</p>
@@ -108,6 +94,7 @@ function Cartoes() {
       ) : (
         <TxnTable rows={monthRows} showFee />
       )}
+      </QueryFeedback>
     </div>
   );
 }

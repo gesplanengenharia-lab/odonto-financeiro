@@ -1,4 +1,7 @@
 import "@testing-library/jest-dom/vitest";
+import { afterEach } from "vitest";
+
+afterEach(() => window.sessionStorage.clear());
 
 Object.defineProperty(window, "scrollTo", {
   writable: true,
@@ -18,3 +21,4 @@ Object.defineProperty(window, "matchMedia", {
     dispatchEvent: () => {},
   }),
 });
+

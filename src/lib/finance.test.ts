@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   dashboardDay,
+  cashFlowProjection,
+  cardReceivables,
+  transactionDetails,
   monthBilling,
   cashPixMonth,
   boletoReceivables,
@@ -527,4 +530,33 @@ it("inadimplência mensal acompanha a baixa desfeita sem duplicar ou antecipar p
   expect(m.groups.map(g=>g.person)).toEqual(["Paciente A"]);expect(m.groups[0]!.total).toBe(150);
   expect(defaultedReceivables(rows,"2026-09",true,"2026-11-05").monthTotal).toBe(200);
   expect(defaultedReceivables([paid,...rows.slice(1)],"2026-10",true,"2026-11-05").groups).toHaveLength(0);
+});
+
+it("projeção conserva o critério da simulação e desconta contas antigas uma única vez", () => {
+  const row: Txn={...buildLaunchRows({kind:"entrada",description:"Pix",payment_method:"pix",amount:100,date:"2026-11-01",installments:1,paid:true},settings,gid)[0]!,id:"a"};
+  const rows: Txn[]=[row,{...row,id:"old-bill",kind:"saida",nature:"fixa",status:"pendente",paid_date:null,due_date:"2026-10-10",gross_amount:200,net_amount:200},
+    {...row,id:"overdue",status:"pendente",paid_date:null,due_date:"2026-11-01",net_amount:900,gross_amount:900},
+    {...row,id:"future",status:"pendente",paid_date:null,due_date:"2026-12-10",net_amount:300,gross_amount:300}];
+  const p=cashFlowProjection(rows,"2026-11",3,500,"2026-11-05");
+  expect(p[0]!.balance).toBe(dashboardFunding(dashboardMonth(rows,"2026-11","2026-11-05").projected,500).closing);
+  expect(p[0]).toMatchObject({other:100,fixed:200,result:-100,balance:400});
+  expect(p[1]).toMatchObject({other:300,fixed:0,result:300,balance:700});
+  expect(p[2]!.balance).toBe(700);
+});
+it("agenda de cartões distingue valores recebidos de parcelas futuras e acompanha o mês",()=>{
+  const row: Txn={...buildLaunchRows({kind:"entrada",description:"Cartão",payment_method:"credito",amount:100,date:"2026-10-01",installments:1},settings,gid)[0]!,id:"a",status:"pago",paid_date:"2026-11-01",net_amount:96.8};
+  const rows: Txn[]=[row,{...row,id:"pending",status:"pendente",paid_date:null,due_date:"2026-12-10"},{...row,id:"pix",payment_method:"pix"}];
+  const a=cardReceivables(rows,"2026-11","2026-11-05");
+  expect(a.received).toBe(96.8);expect(a.open).toBe(0);expect(a.future).toBe(96.8);
+  expect(a.projection[1]).toEqual({month:"2026-12",amount:96.8});
+  expect(cardReceivables(rows,"2026-12","2026-11-05").open).toBe(96.8);
+});
+it("edição preserva a regra do líquido e rejeita valor, taxa e data inválidos",()=>{
+  const original: Txn={...buildLaunchRows({kind:"entrada",description:"Venda",payment_method:"credito",amount:100,date:"2026-11-01",installments:1},settings,gid)[0]!,id:"edit"};
+  const input={description:" Ajustado ",person:" Paciente ",category_id:null,nature:null,competence_date:"2026-11-01",due_date:"2026-12-10",gross_amount:200,fee_amount:10};
+  expect(transactionDetails(original,input)).toMatchObject({description:"Ajustado",person:"Paciente",net_amount:190});
+  expect(()=>transactionDetails(original,{...input,fee_amount:201})).toThrow();
+  expect(()=>transactionDetails(original,{...input,gross_amount:Number.NaN})).toThrow();
+  expect(()=>transactionDetails(original,{...input,competence_date:"2026-02-30"})).toThrow();
+  expect(transactionDetails({...original,kind:"saida"},input).net_amount).toBe(200);
 });

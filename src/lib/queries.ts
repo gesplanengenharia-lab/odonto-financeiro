@@ -1,7 +1,7 @@
 import { canUse } from "./access";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { CardSettings, NewTxnRow, Txn, Kind, Nature } from "./finance";
+import { transactionDetails, type CardSettings, type NewTxnRow, type Txn, type Kind, type Nature, type TransactionDetails } from "./finance";
 
 export interface Category {
   id: string;
@@ -12,7 +12,7 @@ export interface Category {
 
 const PAGE = 1000;
 
-async function fetchTxns(filter: { column: "due_date" | "competence_date"; from?: string | undefined; to?: string | undefined }) {
+async function fetchTxns(filter: { column: "due_date" | "competence_date"; from?: string | undefined; to?: string | undefined; status?: "pendente" }) {
   const all: Txn[] = [];
   for (let page = 0; ; page++) {
     let q = supabase
@@ -20,9 +20,11 @@ async function fetchTxns(filter: { column: "due_date" | "competence_date"; from?
       .select("*")
       .order(filter.column, { ascending: true })
       .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
       .range(page * PAGE, page * PAGE + PAGE - 1);
     if (filter.from) q = q.gte(filter.column, filter.from);
     if (filter.to) q = q.lte(filter.column, filter.to);
+    if (filter.status) q = q.eq("status", filter.status);
     const { data, error } = await q;
     if (error) throw error;
     all.push(...((data ?? []) as unknown as Txn[]));
@@ -51,21 +53,7 @@ export const txnsByCompetenceQuery = (from?: string, to?: string) =>
 export const pendingQuery = () =>
   queryOptions({
     queryKey: ["txns", "pending"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("transactions")
-        .select("*")
-        .eq("status", "pendente")
-        .order("due_date", { ascending: true })
-        .limit(5000);
-      if (error) throw error;
-      return (data ?? []).map((t) => ({
-        ...t,
-        gross_amount: Number(t.gross_amount),
-        fee_amount: Number(t.fee_amount),
-        net_amount: Number(t.net_amount),
-      })) as unknown as Txn[];
-    },
+    queryFn: () => fetchTxns({ column: "due_date", status: "pendente" }),
   });
 
 export const categoriesQuery = () =>
@@ -174,7 +162,27 @@ export function useTxnMutations() {
     onSuccess: invalidate,
   });
 
-  return { create, setPaid, remove };
+  const edit = useMutation({
+    mutationFn: async ({ original, details }: { original: Txn; details: Omit<TransactionDetails, "net_amount"> }) => {
+      await requirePermission("editar"); // Only administrators have this capability.
+      const patch = transactionDetails(original, details);
+      let query = supabase.from("transactions").update(patch)
+        .eq("id", original.id).eq("gross_amount", original.gross_amount)
+        .eq("fee_amount", original.fee_amount).eq("due_date", original.due_date)
+        .eq("competence_date", original.competence_date).eq("status", original.status)
+        .eq("description", original.description).eq("net_amount", original.net_amount);
+      for (const field of ["person", "category_id", "nature", "paid_date"] as const) {
+        const value = original[field];
+        query = value === null ? query.is(field, null) : query.eq(field, value);
+      }
+      const { data, error } = await query.select("id").maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error("O lançamento foi alterado por outra pessoa ou você não tem permissão. Atualize a lista e tente novamente.");
+    },
+    onSuccess: invalidate,
+  });
+
+  return { create, setPaid, remove, edit };
 }
 
 /** Aggregate usage source: metadata only, without patients or financial values. */

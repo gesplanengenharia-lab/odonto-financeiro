@@ -1,3 +1,4 @@
+import { useFinancialMonth } from "@/hooks/use-financial-month";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -7,7 +8,6 @@ import {
   dashboardMonth,
   formatBRL,
   formatMonth,
-  monthKey,
   todayISO,
 } from "@/lib/finance";
 import { txnsByDueQuery } from "@/lib/queries";
@@ -23,7 +23,7 @@ export const Route = createFileRoute("/_authenticated/simulacao")({
 
 function Simulacao() {
   const today = todayISO();
-  const [month, setMonth] = useState(monthKey(today));
+  const [month, setMonth] = useFinancialMonth();
   const [openings, setOpenings] = useState<Record<string, string>>({});
   const cashQuery = useQuery(txnsByDueQuery());
   const m = dashboardMonth(cashQuery.data ?? [], month, today);

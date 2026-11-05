@@ -1,3 +1,4 @@
+import { useFinancialMonth } from "@/hooks/use-financial-month";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -57,7 +58,7 @@ export const Route = createFileRoute("/_authenticated/painel")({
 
 function Painel() {
   const today = todayISO();
-  const [month, setMonth] = useState(monthKey(today));
+  const [month, setMonth] = useFinancialMonth();
   const [tab, setTab] = useState("resumo");
   const [selectedDay, setSelectedDay] = useState(today);
   const day = monthKey(selectedDay) === month ? selectedDay : `${month}-01`;

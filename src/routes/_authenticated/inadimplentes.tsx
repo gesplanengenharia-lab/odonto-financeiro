@@ -1,10 +1,11 @@
+import { useFinancialMonth } from "@/hooks/use-financial-month";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { canUse } from "@/lib/access";
 import { myAccessQuery } from "@/lib/queries";
 import { pageHead } from "@/lib/head";
-import { daysLate, defaultedReceivables, formatBRL, formatDate, formatMonth, monthKey, PAYMENT_LABELS, todayISO, type Txn } from "@/lib/finance";
+import { daysLate, defaultedReceivables, formatBRL, formatDate, formatMonth, PAYMENT_LABELS, todayISO, type Txn } from "@/lib/finance";
 import { pendingQuery, useTxnMutations } from "@/lib/queries";
 import { EmptyState, MonthPicker, PageHeader, StatCard } from "@/components/finance/ui";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ export const Route = createFileRoute("/_authenticated/inadimplentes")({
 
 function Inadimplentes() {
   const today = todayISO();
-  const [month, setMonth] = useState(monthKey(today));
+  const [month, setMonth] = useFinancialMonth();
   const [onlyMonth, setOnlyMonth] = useState(false);
   const { data = [], isLoading, isError, refetch } = useQuery(pendingQuery());
   const { setPaid } = useTxnMutations();

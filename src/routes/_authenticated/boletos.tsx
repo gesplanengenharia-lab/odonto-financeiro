@@ -1,6 +1,7 @@
+import { useFinancialMonth } from "@/hooks/use-financial-month";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { boletoReceivables, formatBRL, formatMonth, monthKey, todayISO } from "@/lib/finance";
 import { txnsByDueQuery } from "@/lib/queries";
@@ -16,7 +17,7 @@ export const Route = createFileRoute("/_authenticated/boletos")({
 
 function Boletos() {
   const today = todayISO();
-  const [month, setMonth] = useState(monthKey(today));
+  const [month, setMonth] = useFinancialMonth();
   const { data = [], isLoading, isError, refetch } = useQuery(txnsByDueQuery());
   const agenda = useMemo(() => boletoReceivables(data, month, today), [data, month, today]);
   return (

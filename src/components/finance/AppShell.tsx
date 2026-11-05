@@ -27,19 +27,19 @@ import clinicLogo from "@/assets/essencial-logo.png";
 import { cn } from "@/lib/utils";
 
 const nav = [
-  { to: "/painel", label: "Painel", icon: LayoutDashboard },
-  { to: "/colaboradores", label: "Colaboradores", icon: Users },
-  { to: "/simulacao", label: "Simulação", icon: Calculator },
-  { to: "/lancamentos", label: "Lançamentos", icon: ArrowLeftRight },
-  { to: "/contas", label: "Contas a pagar e receber", icon: CalendarClock },
-  { to: "/cartoes", label: "Cartões", icon: CreditCard },
-  { to: "/boletos", label: "Boletos", icon: Receipt },
-  { to: "/provisao", label: "Provisão", icon: TrendingUp },
-  { to: "/inadimplentes", label: "Inadimplentes", icon: AlertTriangle },
-  { to: "/relatorios", label: "Relatórios", icon: BarChart3 },
-  { to: "/assistente", label: "Assistente financeiro", icon: MessageCircle },
-  { to: "/analytics", label: "Analytics de uso", icon: Activity },
-  { to: "/configuracoes", label: "Configurações", icon: Settings },
+  { group: "Visão geral", to: "/painel", label: "Painel", icon: LayoutDashboard },
+  { group: "Equipe", to: "/colaboradores", label: "Colaboradores", icon: Users },
+  { group: "Gestão", to: "/simulacao", label: "Simulação", icon: Calculator },
+  { group: "Financeiro", to: "/lancamentos", label: "Lançamentos", icon: ArrowLeftRight },
+  { group: "Financeiro", to: "/contas", label: "Contas a pagar e receber", icon: CalendarClock },
+  { group: "Financeiro", to: "/cartoes", label: "Cartões", icon: CreditCard },
+  { group: "Financeiro", to: "/boletos", label: "Boletos", icon: Receipt },
+  { group: "Gestão", to: "/provisao", label: "Provisão", icon: TrendingUp },
+  { group: "Financeiro", to: "/inadimplentes", label: "Inadimplentes", icon: AlertTriangle },
+  { group: "Gestão", to: "/relatorios", label: "Relatórios", icon: BarChart3 },
+  { group: "Gestão", to: "/assistente", label: "Assistente financeiro", icon: MessageCircle },
+  { group: "Administração", to: "/analytics", label: "Analytics de uso", icon: Activity },
+  { group: "Administração", to: "/configuracoes", label: "Configurações", icon: Settings },
 ] as const;
 
 export function AppShell() {
@@ -91,24 +91,25 @@ export function AppShell() {
 
   const sidebar = (
     <nav className="flex h-full flex-col bg-sidebar px-3 py-5 text-sidebar-foreground">
-      <div className="mb-8 flex items-center gap-2 px-3 font-display text-base font-semibold text-sidebar-accent-foreground">
+      <div className="mb-6 flex items-center gap-2 px-3 font-display text-base font-semibold text-sidebar-accent-foreground">
         <img src={clinicLogo} alt="Essencial Odontologia" className="w-full max-w-[210px] rounded-lg bg-[#976f67] p-3" />
       </div>
-      <ul className="flex flex-1 flex-col gap-1">
-        {nav.filter((item) => canUse(access, item.to.slice(1))).map((item) => (
-          <li key={item.to}>
-            <Link
-              to={item.to}
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              activeProps={{ className: "bg-sidebar-accent text-sidebar-accent-foreground" }}
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-1">
+        {["Visão geral", "Financeiro", "Equipe", "Gestão", "Administração"].map((group) => {
+          const items = nav.filter((item) => item.group === group && canUse(access, item.to.slice(1)));
+          if (!items.length) return null;
+          return <section key={group} aria-label={group}>
+            <h2 className="mb-2 px-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/65">{group}</h2>
+            <ul className="space-y-1">{items.map((item) => <li key={item.to}>
+              <Link to={item.to} onClick={() => setOpen(false)}
+                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                activeProps={{ className: "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm" }}>
+                <item.icon className="h-4 w-4 shrink-0" />{item.label}
+              </Link>
+            </li>)}</ul>
+          </section>;
+        })}
+      </div>
       <div className="mt-4 border-t border-sidebar-border px-3 pt-4">
         <p className="truncate text-sm font-semibold text-sidebar-accent-foreground">{access?.name}</p>
         <p className="text-xs capitalize text-sidebar-foreground/70">{access?.roles.includes("admin") ? "Administrador" : "Membro"}</p>
@@ -121,6 +122,7 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen bg-background lg:grid lg:grid-cols-[260px_1fr]">
+      <a href="#main-content" className="sr-only z-[60] rounded-lg bg-card p-3 text-primary focus:not-sr-only focus:fixed focus:left-4 focus:top-4">Ir para o conteúdo</a>
       <aside className="sticky top-0 hidden h-screen lg:block">{sidebar}</aside>
 
       <div className="flex items-center justify-between border-b border-border bg-card px-4 py-3 lg:hidden">
@@ -139,7 +141,7 @@ export function AppShell() {
         </div>
       </div>
 
-      <main className="min-w-0 px-4 py-6 sm:px-8 sm:py-8">
+      <main id="main-content" className="mx-auto w-full min-w-0 max-w-[1680px] px-4 py-6 sm:px-8 sm:py-8 lg:px-10">
         {canUse(access, location.pathname.split("/").filter(Boolean)[0] ?? "painel") ? <Outlet /> : <div className="surface-card p-6"><h1 className="text-xl font-semibold">Acesso restrito</h1><p className="mt-2 text-sm text-muted-foreground">{!access.permissionsReady ? "As permissões individuais ainda precisam ser ativadas pelo administrador." : "Peça ao administrador para liberar os módulos necessários ao seu trabalho."}</p>{firstAllowedPath(access) && <Button className="mt-4" onClick={() => navigate({ to: firstAllowedPath(access)! })}>Abrir módulo autorizado</Button>}<Button className="ml-2 mt-4" variant="outline" onClick={() => void refetch()}>Verificar acesso</Button></div>}
       </main>
     </div>

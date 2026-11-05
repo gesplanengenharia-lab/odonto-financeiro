@@ -65,6 +65,20 @@ export interface NewLaunchInput {
 
 export type NewTxnRow = Omit<Txn, "id">;
 
+export type TransactionDetails = Pick<Txn, "description" | "person" | "category_id" | "nature" | "competence_date" | "due_date" | "gross_amount" | "fee_amount" | "net_amount">;
+export function transactionDetails(original: Txn, input: Omit<TransactionDetails, "net_amount">): TransactionDetails {
+  const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && toISO(parseISO(value)) === value;
+  if (!input.description.trim()) throw new Error("Informe a descrição do lançamento.");
+  if (!validDate(input.competence_date) || !validDate(input.due_date)) throw new Error("Confira a competência e o vencimento.");
+  if (!Number.isFinite(input.gross_amount) || input.gross_amount < 0 || input.gross_amount > 9999999999.99) throw new Error("Informe um valor válido.");
+  if (!Number.isFinite(input.fee_amount) || input.fee_amount < 0 || input.fee_amount > input.gross_amount) throw new Error("A taxa deve ficar entre zero e o valor bruto.");
+  const gross = round2(input.gross_amount);
+  const fee = original.kind === "entrada" ? round2(input.fee_amount) : 0;
+  return { ...input, description: input.description.trim(), person: input.person?.trim() || null,
+    nature: original.kind === "saida" ? input.nature : null,
+    gross_amount: gross, fee_amount: fee, net_amount: round2(gross - fee) };
+}
+
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /** ISO date helpers working on calendar dates (no timezone drift). */
@@ -445,6 +459,44 @@ export function cashPixMonth(txns: Txn[], month: string, today = todayISO()) {
 export function dashboardFunding(projected: number, opening: number) {
   const closing = round2(opening + projected);
   return { closing, contribution: round2(Math.max(0, -closing)) };
+}
+
+/** Same conservative cash basis as the monthly simulation, carrying old bills once. */
+export function cashFlowProjection(txns: Txn[], month: string, months: number, opening: number, today = todayISO()) {
+  let balance = opening;
+  return nextMonths(month, months).map((key, index) => {
+    const m = dashboardMonth(txns, key, today);
+    const { start, end } = monthRange(key);
+    const expenses = txns.filter((t) => t.kind === "saida" && (
+      t.status === "pago" ? (t.paid_date || t.due_date) >= start && (t.paid_date || t.due_date) <= end :
+        (t.due_date >= start && t.due_date <= end) || (index === 0 && t.due_date < start)
+    ));
+    const fixed = round2(expenses.filter((t) => t.nature === "fixa").reduce((sum, t) => sum + cashValue(t), 0));
+    const variable = round2(expenses.filter((t) => t.nature !== "fixa").reduce((sum, t) => sum + cashValue(t), 0));
+    const card = round2(m.byMethod.filter((r) => r.method === "credito" || r.method === "debito").reduce((sum, r) => sum + r.received + r.expected, 0));
+    const other = round2(m.totalExpected - card);
+    const result = round2(m.realized + m.toReceive - m.toPay - (index === 0 ? m.priorToPay : 0));
+    balance = round2(balance + result);
+    return { key, mes: formatMonth(key), card, other, fixed, variable, result, balance };
+  });
+}
+
+export function cardReceivables(txns: Txn[], month: string, today = todayISO()) {
+  const cards = txns.filter((t) => t.kind === "entrada" && (t.payment_method === "credito" || t.payment_method === "debito"));
+  const m = dashboardMonth(cards, month, today);
+  const sum = (rows: Txn[]) => round2(rows.reduce((v, t) => v + Number(t.net_amount), 0));
+  const pending = cards.filter((t) => t.status === "pendente");
+  const monthRows = cards.filter((t) => monthKey(t.due_date) === month);
+  const projection = nextMonths(month, 24).map((key) => ({ month: key,
+    amount: sum(pending.filter((t) => monthKey(t.due_date) === key)),
+  }));
+  return { received: m.received, open: round2(m.toReceive + m.overdueReceivable),
+    overdue: sum(pending.filter((t) => t.due_date < today)),
+    future: round2(projection.slice(1).reduce((v, r) => v + r.amount, 0)), projection,
+    monthGross: round2(monthRows.reduce((v, t) => v + Number(t.gross_amount), 0)),
+    monthFees: round2(monthRows.reduce((v, t) => v + Number(t.fee_amount), 0)),
+    monthRows,
+  };
 }
 
 /** Daily reconciliation only includes confirmed payment dates; never infer a day. */
