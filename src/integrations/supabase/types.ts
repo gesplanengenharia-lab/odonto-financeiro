@@ -94,6 +94,7 @@ export type Database = {
       }
       transactions: {
         Row: {
+          auto_settle: boolean
           category_id: string | null
           competence_date: string
           created_at: string
@@ -116,6 +117,7 @@ export type Database = {
           status: string
         }
         Insert: {
+          auto_settle?: boolean
           category_id?: string | null
           competence_date?: string
           created_at?: string
@@ -138,6 +140,7 @@ export type Database = {
           status?: string
         }
         Update: {
+          auto_settle?: boolean
           category_id?: string | null
           competence_date?: string
           created_at?: string
@@ -195,6 +198,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      auto_settle_due_entries: { Args: never; Returns: number }
       can_use_module: {
         Args: { _module: string; _user_id: string }
         Returns: boolean
