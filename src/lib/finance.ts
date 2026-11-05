@@ -351,6 +351,27 @@ export function monthBilling(txns: Txn[], month: string) {
 
 export const LIQUID_METHODS: PaymentMethod[] = ["dinheiro", "pix", "debito"];
 
+/** Boleto agenda follows due dates; actual receipts follow payment dates. */
+export function boletoReceivables(txns: Txn[], month: string, today = todayISO()) {
+  const boletos = txns.filter((t) => t.kind === "entrada" && t.payment_method === "boleto");
+  const total = (rows: Txn[]) => round2(rows.reduce((sum, t) => sum + Number(t.net_amount), 0));
+  const pending = boletos.filter((t) => t.status === "pendente");
+  const monthRows = boletos.filter((t) => monthKey(t.due_date) === month)
+    .sort((a, b) => a.due_date.localeCompare(b.due_date) || (a.person ?? "").localeCompare(b.person ?? ""));
+  const projection = nextMonths(month, 24).map((key) => {
+    const rows = pending.filter((t) => monthKey(t.due_date) === key);
+    return { month: key, amount: total(rows), count: rows.length };
+  });
+  return {
+    received: total(boletos.filter((t) => t.status === "pago" && monthKey(t.paid_date || t.due_date) === month)),
+    open: projection[0]!.amount,
+    future: round2(projection.slice(1).reduce((sum, row) => sum + row.amount, 0)),
+    overdue: total(pending.filter((t) => t.due_date < today)),
+    monthRows,
+    projection,
+  };
+}
+
 const isLiquidEntry = (t: Txn) =>
   LIQUID_METHODS.includes(t.payment_method) ||
   (t.payment_method === "boleto" && t.installment_total === 1);

@@ -15,11 +15,13 @@ export interface Access {
 export function canUse(access: Access | null | undefined, module: string) {
   if (!access) return false;
   if (access.roles.includes("admin")) return true;
+  // Boletos is a dedicated view of accounts receivable, using the same permission.
+  const permission = module === "boletos" ? "contas" : module;
   return (
     access.permissionsReady &&
     access.roles.includes("membro") &&
-    OPERATIONAL_MODULES.some((m) => m.key === module) &&
-    access.modules.includes(module)
+    OPERATIONAL_MODULES.some((m) => m.key === permission) &&
+    access.modules.includes(permission)
   );
 }
 export function firstAllowedPath(access: Access | null | undefined) {

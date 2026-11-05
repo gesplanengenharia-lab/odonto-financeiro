@@ -3,6 +3,7 @@ import {
   dashboardDay,
   monthBilling,
   cashPixMonth,
+  boletoReceivables,
   dashboardIndicators,
   dashboardCosts,
   dashboardMonth,
@@ -487,4 +488,26 @@ it("inclui boleto em parcela única pelo recebimento e separa parcelas, pendênc
   expect(cash.coveragePct).toBe(290);
   expect(cash.entries.map(t=>t.id)).toEqual(["vista"]);
   expect(dashboardMonth(rows,"2026-10","2026-10-20").received).toBe(2900);
+});
+
+it("agenda de boletos separa pagamento, vencimento e pendências durante 24 meses", () => {
+  const boleto: Txn = {...buildLaunchRows({kind:"entrada",description:"Boleto",payment_method:"boleto",
+    amount:100,date:"2026-10-01",installments:1,paid:false},settings,gid)[0]!,id:"open"};
+  const rows: Txn[] = [boleto,
+    {...boleto,id:"late",due_date:"2026-09-15",net_amount:40},
+    {...boleto,id:"received",status:"pago",due_date:"2026-09-20",paid_date:"2026-10-02",net_amount:80},
+    {...boleto,id:"paid-elsewhere",status:"pago",paid_date:"2026-11-01"},
+    {...boleto,id:"future",due_date:"2027-01-10",installment_total:12,net_amount:200},
+    {...boleto,id:"last",due_date:"2028-09-30",net_amount:300},
+    {...boleto,id:"outside",due_date:"2028-10-01",net_amount:999},
+    {...boleto,id:"expense",kind:"saida",net_amount:1000},
+    {...boleto,id:"credit",payment_method:"credito",net_amount:2000},
+  ];
+  const a=boletoReceivables(rows,"2026-10","2026-10-05");
+  expect(a.received).toBe(80);expect(a.open).toBe(100);expect(a.future).toBe(500);expect(a.overdue).toBe(140);
+  expect(a.monthRows.map(t=>t.id)).toEqual(["open","paid-elsewhere"]);
+  expect(a.projection).toHaveLength(24);
+  expect(a.projection[23]).toEqual({month:"2028-09",amount:300,count:1});
+  expect(boletoReceivables(rows,"2027-01","2026-10-05").open).toBe(200);
+  expect(boletoReceivables([],"2026-10").projection.every(row=>row.amount===0&&row.count===0)).toBe(true);
 });

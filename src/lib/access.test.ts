@@ -16,3 +16,13 @@ describe("permissões por função", () => {
     expect(firstAllowedPath({ roles: ["membro"], modules: [], permissionsReady: true })).toBeNull();
   });
 });
+
+
+it("boletos exige a permissão de contas e não libera outros módulos", () => {
+  const member={roles:["membro"],modules:["contas"],permissionsReady:true};
+  expect(canUse(member,"boletos")).toBe(true);
+  expect(canUse({...member,modules:["cartoes"]},"boletos")).toBe(false);
+  expect(canUse({...member,permissionsReady:false},"boletos")).toBe(false);
+  expect(canUse({...member,roles:[]},"boletos")).toBe(false);
+  expect(canUse(member,"painel")).toBe(false);
+});
