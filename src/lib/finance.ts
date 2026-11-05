@@ -472,7 +472,7 @@ export interface PayrollAmounts {
 
 /** Monthly remuneration in integer cents. Discounts cannot create a negative payment. */
 export function payrollTotal(values: PayrollAmounts) {
-  const amounts = Object.values(values);
+  const amounts = [values.base, values.additional, values.commission, values.bonus, values.discount, values.termination ?? 0, values.vacation ?? 0];
   if (amounts.some(value => !Number.isFinite(value) || value < 0 || value > 999999999))
     throw new Error("Informe valores positivos válidos, com até duas casas decimais.");
   const cents = (value: number) => Math.round(value * 100);
