@@ -1,7 +1,8 @@
 // Pure finance rules for the clinic. No I/O here so it can be tested.
 
 export type Kind = "entrada" | "saida";
-export type PaymentMethod = "dinheiro" | "pix" | "debito" | "credito" | "boleto" | "transferencia" | "cheque";
+export type PaymentMethod =
+  "dinheiro" | "pix" | "debito" | "credito" | "boleto" | "transferencia" | "cheque";
 export type Status = "pago" | "pendente";
 export type Nature = "fixa" | "variavel";
 
@@ -65,18 +66,50 @@ export interface NewLaunchInput {
 
 export type NewTxnRow = Omit<Txn, "id">;
 
-export type TransactionDetails = Pick<Txn, "description" | "person" | "category_id" | "nature" | "competence_date" | "due_date" | "gross_amount" | "fee_amount" | "net_amount">;
-export function transactionDetails(original: Txn, input: Omit<TransactionDetails, "net_amount">): TransactionDetails {
-  const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && toISO(parseISO(value)) === value;
+export type TransactionDetails = Pick<
+  Txn,
+  | "description"
+  | "person"
+  | "category_id"
+  | "nature"
+  | "competence_date"
+  | "due_date"
+  | "gross_amount"
+  | "fee_amount"
+  | "net_amount"
+>;
+export function transactionDetails(
+  original: Txn,
+  input: Omit<TransactionDetails, "net_amount">,
+): TransactionDetails {
+  const validDate = (value: string) =>
+    /^\d{4}-\d{2}-\d{2}$/.test(value) && toISO(parseISO(value)) === value;
   if (!input.description.trim()) throw new Error("Informe a descrição do lançamento.");
-  if (!validDate(input.competence_date) || !validDate(input.due_date)) throw new Error("Confira a competência e o vencimento.");
-  if (!Number.isFinite(input.gross_amount) || input.gross_amount < 0 || input.gross_amount > 9999999999.99) throw new Error("Informe um valor válido.");
-  if (!Number.isFinite(input.fee_amount) || input.fee_amount < 0 || input.fee_amount > input.gross_amount) throw new Error("A taxa deve ficar entre zero e o valor bruto.");
+  if (!validDate(input.competence_date) || !validDate(input.due_date))
+    throw new Error("Confira a competência e o vencimento.");
+  if (
+    !Number.isFinite(input.gross_amount) ||
+    input.gross_amount < 0 ||
+    input.gross_amount > 9999999999.99
+  )
+    throw new Error("Informe um valor válido.");
+  if (
+    !Number.isFinite(input.fee_amount) ||
+    input.fee_amount < 0 ||
+    input.fee_amount > input.gross_amount
+  )
+    throw new Error("A taxa deve ficar entre zero e o valor bruto.");
   const gross = round2(input.gross_amount);
   const fee = original.kind === "entrada" ? round2(input.fee_amount) : 0;
-  return { ...input, description: input.description.trim(), person: input.person?.trim() || null,
+  return {
+    ...input,
+    description: input.description.trim(),
+    person: input.person?.trim() || null,
     nature: original.kind === "saida" ? input.nature : null,
-    gross_amount: gross, fee_amount: fee, net_amount: round2(gross - fee) };
+    gross_amount: gross,
+    fee_amount: fee,
+    net_amount: round2(gross - fee),
+  };
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -116,7 +149,11 @@ export function todayISO(): string {
 }
 
 /** Fee % charged by the card machine for a given method / number of installments. */
-export function cardFeePercent(settings: CardSettings, method: PaymentMethod, installments: number) {
+export function cardFeePercent(
+  settings: CardSettings,
+  method: PaymentMethod,
+  installments: number,
+) {
   if (method === "debito") return Number(settings.debit_fee);
   if (method !== "credito") return 0;
   if (installments <= 1) return Number(settings.credit_fee_1x);
@@ -149,7 +186,8 @@ export function buildLaunchRows(
   const installments =
     input.payment_method === "debito" ? 1 : Math.max(1, Math.floor(input.installments || 1));
   const repeat = Math.max(1, Math.floor(input.repeat_months || 1));
-  const feePct = input.kind === "entrada" ? cardFeePercent(settings, input.payment_method, installments) : 0;
+  const feePct =
+    input.kind === "entrada" ? cardFeePercent(settings, input.payment_method, installments) : 0;
   const rows: NewTxnRow[] = [];
 
   for (let r = 0; r < repeat; r++) {
@@ -197,7 +235,10 @@ export function isOverdue(t: Pick<Txn, "status" | "due_date">, today = todayISO(
 }
 
 /** A patient is in default when a non-card receivable is past due and unpaid. */
-export function isDefaulted(t: Pick<Txn, "kind" | "status" | "due_date" | "payment_method">, today = todayISO()) {
+export function isDefaulted(
+  t: Pick<Txn, "kind" | "status" | "due_date" | "payment_method">,
+  today = todayISO(),
+) {
   return (
     t.kind === "entrada" &&
     t.payment_method !== "debito" &&
@@ -211,7 +252,12 @@ export function daysLate(due: string, today = todayISO()) {
 }
 
 /** Outstanding default follows the original due month, never the sale month. */
-export function defaultedReceivables(txns: Txn[], month: string, onlyMonth = false, today = todayISO()) {
+export function defaultedReceivables(
+  txns: Txn[],
+  month: string,
+  onlyMonth = false,
+  today = todayISO(),
+) {
   const late = txns.filter((t) => isDefaulted(t, today));
   const total = (rows: Txn[]) => round2(rows.reduce((sum, t) => sum + Number(t.gross_amount), 0));
   const monthRows = late.filter((t) => monthKey(t.due_date) === month);
@@ -221,10 +267,14 @@ export function defaultedReceivables(txns: Txn[], month: string, onlyMonth = fal
     const person = t.person?.trim() || "Sem paciente informado";
     map.set(person, [...(map.get(person) ?? []), t]);
   });
-  const groups = [...map.entries()].map(([person, items]) => ({
-    person, rows: items, total: total(items),
-    maxDays: Math.max(...items.map((t) => daysLate(t.due_date, today))),
-  })).sort((a, b) => b.total - a.total);
+  const groups = [...map.entries()]
+    .map(([person, items]) => ({
+      person,
+      rows: items,
+      total: total(items),
+      maxDays: Math.max(...items.map((t) => daysLate(t.due_date, today))),
+    }))
+    .sort((a, b) => b.total - a.total);
   return {
     groups,
     total: total(late),
@@ -245,7 +295,9 @@ export interface Summary {
 }
 
 /** DRE-style summary (by competence). */
-export function summarize(txns: Pick<Txn, "kind" | "gross_amount" | "fee_amount" | "net_amount" | "nature">[]): Summary {
+export function summarize(
+  txns: Pick<Txn, "kind" | "gross_amount" | "fee_amount" | "net_amount" | "nature">[],
+): Summary {
   let grossRevenue = 0,
     cardFees = 0,
     fixedExpenses = 0,
@@ -290,7 +342,20 @@ const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "
 export function formatMonth(key: string, long = false) {
   const [y = "", m = "1"] = key.split("-");
   const names = long
-    ? ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+    ? [
+        "Janeiro",
+        "Fevereiro",
+        "Março",
+        "Abril",
+        "Maio",
+        "Junho",
+        "Julho",
+        "Agosto",
+        "Setembro",
+        "Outubro",
+        "Novembro",
+        "Dezembro",
+      ]
     : MONTHS;
   return `${names[Number(m) - 1]}${long ? " de " : "/"}${long ? y : y.slice(2)}`;
 }
@@ -393,14 +458,20 @@ export function boletoReceivables(txns: Txn[], month: string, today = todayISO()
   const boletos = txns.filter((t) => t.kind === "entrada" && t.payment_method === "boleto");
   const total = (rows: Txn[]) => round2(rows.reduce((sum, t) => sum + Number(t.net_amount), 0));
   const pending = boletos.filter((t) => t.status === "pendente");
-  const monthRows = boletos.filter((t) => monthKey(t.due_date) === month)
-    .sort((a, b) => a.due_date.localeCompare(b.due_date) || (a.person ?? "").localeCompare(b.person ?? ""));
+  const monthRows = boletos
+    .filter((t) => monthKey(t.due_date) === month)
+    .sort(
+      (a, b) =>
+        a.due_date.localeCompare(b.due_date) || (a.person ?? "").localeCompare(b.person ?? ""),
+    );
   const projection = nextMonths(month, 24).map((key) => {
     const rows = pending.filter((t) => monthKey(t.due_date) === key);
     return { month: key, amount: total(rows), count: rows.length };
   });
   return {
-    received: total(boletos.filter((t) => t.status === "pago" && monthKey(t.paid_date || t.due_date) === month)),
+    received: total(
+      boletos.filter((t) => t.status === "pago" && monthKey(t.paid_date || t.due_date) === month),
+    ),
     open: projection[0]!.amount,
     future: round2(projection.slice(1).reduce((sum, row) => sum + row.amount, 0)),
     overdue: total(pending.filter((t) => t.due_date < today)),
@@ -462,18 +533,35 @@ export function dashboardFunding(projected: number, opening: number) {
 }
 
 /** Same conservative cash basis as the monthly simulation, carrying old bills once. */
-export function cashFlowProjection(txns: Txn[], month: string, months: number, opening: number, today = todayISO()) {
+export function cashFlowProjection(
+  txns: Txn[],
+  month: string,
+  months: number,
+  opening: number,
+  today = todayISO(),
+) {
   let balance = opening;
   return nextMonths(month, months).map((key, index) => {
     const m = dashboardMonth(txns, key, today);
     const { start, end } = monthRange(key);
-    const expenses = txns.filter((t) => t.kind === "saida" && (
-      t.status === "pago" ? (t.paid_date || t.due_date) >= start && (t.paid_date || t.due_date) <= end :
-        (t.due_date >= start && t.due_date <= end) || (index === 0 && t.due_date < start)
-    ));
-    const fixed = round2(expenses.filter((t) => t.nature === "fixa").reduce((sum, t) => sum + cashValue(t), 0));
-    const variable = round2(expenses.filter((t) => t.nature !== "fixa").reduce((sum, t) => sum + cashValue(t), 0));
-    const card = round2(m.byMethod.filter((r) => r.method === "credito" || r.method === "debito").reduce((sum, r) => sum + r.received + r.expected, 0));
+    const expenses = txns.filter(
+      (t) =>
+        t.kind === "saida" &&
+        (t.status === "pago"
+          ? (t.paid_date || t.due_date) >= start && (t.paid_date || t.due_date) <= end
+          : (t.due_date >= start && t.due_date <= end) || (index === 0 && t.due_date < start)),
+    );
+    const fixed = round2(
+      expenses.filter((t) => t.nature === "fixa").reduce((sum, t) => sum + cashValue(t), 0),
+    );
+    const variable = round2(
+      expenses.filter((t) => t.nature !== "fixa").reduce((sum, t) => sum + cashValue(t), 0),
+    );
+    const card = round2(
+      m.byMethod
+        .filter((r) => r.method === "credito" || r.method === "debito")
+        .reduce((sum, r) => sum + r.received + r.expected, 0),
+    );
     const other = round2(m.totalExpected - card);
     const result = round2(m.realized + m.toReceive - m.toPay - (index === 0 ? m.priorToPay : 0));
     balance = round2(balance + result);
@@ -482,17 +570,24 @@ export function cashFlowProjection(txns: Txn[], month: string, months: number, o
 }
 
 export function cardReceivables(txns: Txn[], month: string, today = todayISO()) {
-  const cards = txns.filter((t) => t.kind === "entrada" && (t.payment_method === "credito" || t.payment_method === "debito"));
+  const cards = txns.filter(
+    (t) =>
+      t.kind === "entrada" && (t.payment_method === "credito" || t.payment_method === "debito"),
+  );
   const m = dashboardMonth(cards, month, today);
   const sum = (rows: Txn[]) => round2(rows.reduce((v, t) => v + Number(t.net_amount), 0));
   const pending = cards.filter((t) => t.status === "pendente");
   const monthRows = cards.filter((t) => monthKey(t.due_date) === month);
-  const projection = nextMonths(month, 24).map((key) => ({ month: key,
+  const projection = nextMonths(month, 24).map((key) => ({
+    month: key,
     amount: sum(pending.filter((t) => monthKey(t.due_date) === key)),
   }));
-  return { received: m.received, open: round2(m.toReceive + m.overdueReceivable),
+  return {
+    received: m.received,
+    open: round2(m.toReceive + m.overdueReceivable),
     overdue: sum(pending.filter((t) => t.due_date < today)),
-    future: round2(projection.slice(1).reduce((v, r) => v + r.amount, 0)), projection,
+    future: round2(projection.slice(1).reduce((v, r) => v + r.amount, 0)),
+    projection,
     monthGross: round2(monthRows.reduce((v, t) => v + Number(t.gross_amount), 0)),
     monthFees: round2(monthRows.reduce((v, t) => v + Number(t.fee_amount), 0)),
     monthRows,
@@ -590,17 +685,35 @@ export function financialAssistantContext(
  * Default rate: outstanding non-card receivables / all non-card receivables
  * due earlier than today within the selected month (including settled rows).
  */
-export function dashboardIndicators(txns: Txn[], competence: Txn[], month: string, today = todayISO()) {
+export function dashboardIndicators(
+  txns: Txn[],
+  competence: Txn[],
+  month: string,
+  today = todayISO(),
+) {
   const cash = dashboardMonth(txns, month, today);
   const summary = summarize(competence);
-  const share = (value: number, total: number) => total > 0 ? round2(value / total * 100) : null;
+  const share = (value: number, total: number) =>
+    total > 0 ? round2((value / total) * 100) : null;
   const { start, end } = monthRange(month);
-  const due = txns.filter(t => t.kind === "entrada" && t.payment_method !== "credito" && t.payment_method !== "debito"
-    && t.due_date >= start && t.due_date <= end && t.due_date < today);
+  const due = txns.filter(
+    (t) =>
+      t.kind === "entrada" &&
+      t.payment_method !== "credito" &&
+      t.payment_method !== "debito" &&
+      t.due_date >= start &&
+      t.due_date <= end &&
+      t.due_date < today,
+  );
   const dueAmount = round2(due.reduce((sum, t) => sum + Number(t.gross_amount), 0));
-  const defaultedAmount = round2(due.filter(t => isDefaulted(t, today)).reduce((sum, t) => sum + Number(t.gross_amount), 0));
+  const defaultedAmount = round2(
+    due.filter((t) => isDefaulted(t, today)).reduce((sum, t) => sum + Number(t.gross_amount), 0),
+  );
   return {
-    byMethod: cash.byMethod.map(row => ({ method: row.method, receivedPct: share(row.received, cash.received) })),
+    byMethod: cash.byMethod.map((row) => ({
+      method: row.method,
+      receivedPct: share(row.received, cash.received),
+    })),
     profitPct: share(summary.profit, summary.grossRevenue),
     fixedPct: share(summary.fixedExpenses, summary.totalExpenses),
     variablePct: share(summary.variableExpenses, summary.totalExpenses),
@@ -618,16 +731,27 @@ export function dashboardCosts(txns: Txn[], categories: { id: string; name: stri
     { nature: "variavel", label: "Custos variáveis" },
     { nature: null, label: "Sem natureza definida" },
   ] as const;
-  const percent = (value: number) => summary.totalExpenses > 0 ? round2(value / summary.totalExpenses * 100) : null;
-  return groups.map(group => {
+  const percent = (value: number) =>
+    summary.totalExpenses > 0 ? round2((value / summary.totalExpenses) * 100) : null;
+  return groups.map((group) => {
     const values = new Map<string | null, number>();
-    for (const txn of txns.filter(t => t.kind === "saida" && t.nature === group.nature)) {
+    for (const txn of txns.filter((t) => t.kind === "saida" && t.nature === group.nature)) {
       values.set(txn.category_id, (values.get(txn.category_id) ?? 0) + Number(txn.gross_amount));
     }
     const amount = round2([...values.values()].reduce((sum, value) => sum + value, 0));
-    return { ...group, amount, percent: percent(amount), rows: [...values].map(([id, value]) => ({
-      id, name: categories.find(c => c.id === id)?.name ?? "Sem categoria", amount: round2(value), percent: percent(value),
-    })).sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name, "pt-BR")) };
+    return {
+      ...group,
+      amount,
+      percent: percent(amount),
+      rows: [...values]
+        .map(([id, value]) => ({
+          id,
+          name: categories.find((c) => c.id === id)?.name ?? "Sem categoria",
+          amount: round2(value),
+          percent: percent(value),
+        }))
+        .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name, "pt-BR")),
+    };
   });
 }
 
@@ -643,16 +767,29 @@ export interface PayrollAmounts {
 
 /** Monthly remuneration in integer cents. Discounts cannot create a negative payment. */
 export function payrollTotal(values: PayrollAmounts) {
-  const amounts = [values.base, values.additional, values.commission, values.bonus, values.discount, values.termination ?? 0, values.vacation ?? 0];
-  if (amounts.some(value => !Number.isFinite(value) || value < 0 || value > 999999999))
+  const amounts = [
+    values.base,
+    values.additional,
+    values.commission,
+    values.bonus,
+    values.discount,
+    values.termination ?? 0,
+    values.vacation ?? 0,
+  ];
+  if (amounts.some((value) => !Number.isFinite(value) || value < 0 || value > 999999999))
     throw new Error("Informe valores positivos válidos, com até duas casas decimais.");
   const cents = (value: number) => Math.round(value * 100);
-  const total = cents(values.base) + cents(values.additional) + cents(values.commission) + cents(values.bonus) + cents(values.termination ?? 0) + cents(values.vacation ?? 0) - cents(values.discount);
+  const total =
+    cents(values.base) +
+    cents(values.additional) +
+    cents(values.commission) +
+    cents(values.bonus) +
+    cents(values.termination ?? 0) +
+    cents(values.vacation ?? 0) -
+    cents(values.discount);
   if (total < 0) throw new Error("Os descontos não podem superar a remuneração do mês.");
   return total / 100;
 }
-
-
 
 export interface DownPaymentInput {
   amount: number;
@@ -668,29 +805,75 @@ export function buildLaunchPlan(
   settings: CardSettings,
   makeGroupId: () => string,
 ) {
-  const validDate = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date;
+  const validDate = (date: string) =>
+    /^\d{4}-\d{2}-\d{2}$/.test(date) &&
+    !Number.isNaN(Date.parse(date)) &&
+    new Date(date).toISOString().slice(0, 10) === date;
   const cents = (amount: number) => {
-    if (!Number.isFinite(amount) || amount <= 0 || amount > 999999999 || Math.abs(round2(amount) - amount) > 0.000001)
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      amount > 999999999 ||
+      Math.abs(round2(amount) - amount) > 0.000001
+    )
       throw new Error("Informe um valor positivo, com até duas casas decimais.");
     return Math.round(amount * 100);
   };
   const total = cents(input.amount);
-  if (!validDate(input.date) || (input.first_due_date && !validDate(input.first_due_date))) throw new Error("Informe datas válidas para a venda e os vencimentos.");
-  if (!Number.isInteger(input.installments) || input.installments < 1 || input.installments > (input.payment_method === "credito" ? 12 : 24)) throw new Error("Confira a quantidade de parcelas.");
+  if (!validDate(input.date) || (input.first_due_date && !validDate(input.first_due_date)))
+    throw new Error("Informe datas válidas para a venda e os vencimentos.");
+  if (
+    !Number.isInteger(input.installments) ||
+    input.installments < 1 ||
+    input.installments > (input.payment_method === "credito" ? 12 : 24)
+  )
+    throw new Error("Confira a quantidade de parcelas.");
   const { down_payment: down, ...sale } = input;
-  const common = { ...sale, repeat_months: 1 };
-  if (!down) return { rows: buildLaunchRows(common, settings, makeGroupId), entryAmount: 0, remaining: total / 100 };
+  const repeat = input.repeat_months ?? 1;
+  if (!Number.isInteger(repeat) || repeat < 1 || repeat > 24)
+    throw new Error("A recorrência deve ter de 1 a 24 meses.");
+  if (repeat > 1 && (input.kind !== "saida" || input.installments !== 1 || down))
+    throw new Error("Recorrência é destinada a despesas mensais sem parcelamento.");
+  const common = { ...sale, repeat_months: repeat };
+  if (!down)
+    return {
+      rows: buildLaunchRows(common, settings, makeGroupId),
+      entryAmount: 0,
+      remaining: total / 100,
+    };
   if (input.kind !== "entrada") throw new Error("Pagamento com entrada é destinado às receitas.");
   const entry = cents(down.amount);
-  if (entry >= total) throw new Error("A entrada deve ser menor que o valor total. Para pagamento integral, desmarque a opção de entrada.");
-  if (down.first_due_date && !validDate(down.first_due_date)) throw new Error("Informe uma data válida para a entrada.");
+  if (entry >= total)
+    throw new Error(
+      "A entrada deve ser menor que o valor total. Para pagamento integral, desmarque a opção de entrada.",
+    );
+  if (down.first_due_date && !validDate(down.first_due_date))
+    throw new Error("Informe uma data válida para a entrada.");
   const group = makeGroupId();
   const remaining = (total - entry) / 100;
-  const entryRows = buildLaunchRows({ ...common, amount: entry / 100, description: `${sale.description} · Entrada`,
-    payment_method: down.payment_method, installments: 1, first_due_date: down.first_due_date || sale.date,
-    paid: !!down.paid }, settings, () => group);
-  const balanceRows = buildLaunchRows({ ...common, amount: remaining, description: `${sale.description} · Saldo` }, settings, () => group);
-  return { rows: [...entryRows, ...balanceRows].map(row => ({ ...row, group_id: group })), entryAmount: entry / 100, remaining };
+  const entryRows = buildLaunchRows(
+    {
+      ...common,
+      amount: entry / 100,
+      description: `${sale.description} · Entrada`,
+      payment_method: down.payment_method,
+      installments: 1,
+      first_due_date: down.first_due_date || sale.date,
+      paid: !!down.paid,
+    },
+    settings,
+    () => group,
+  );
+  const balanceRows = buildLaunchRows(
+    { ...common, amount: remaining, description: `${sale.description} · Saldo` },
+    settings,
+    () => group,
+  );
+  return {
+    rows: [...entryRows, ...balanceRows].map((row) => ({ ...row, group_id: group })),
+    entryAmount: entry / 100,
+    remaining,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -702,8 +885,14 @@ export function cashMargin(realized: number, received: number) {
 }
 
 export type ReceiptGroupKey =
-  | "dinheiro" | "pix" | "debito" | "boleto_avista"
-  | "credito" | "boleto_parcelado" | "cheque" | "transferencia";
+  | "dinheiro"
+  | "pix"
+  | "debito"
+  | "boleto_avista"
+  | "credito"
+  | "boleto_parcelado"
+  | "cheque"
+  | "transferencia";
 
 export const RECEIPT_GROUP_LABELS: Record<ReceiptGroupKey, string> = {
   dinheiro: "Dinheiro",
@@ -718,7 +907,9 @@ export const RECEIPT_GROUP_LABELS: Record<ReceiptGroupKey, string> = {
 
 const receiptGroup = (t: Txn): ReceiptGroupKey =>
   t.payment_method === "boleto"
-    ? isLiquidEntry(t) ? "boleto_avista" : "boleto_parcelado"
+    ? isLiquidEntry(t)
+      ? "boleto_avista"
+      : "boleto_parcelado"
     : t.payment_method;
 
 /** Receipts of the month (by payment date, net) split by form, with the
@@ -733,8 +924,16 @@ export function receiptComposition(txns: Txn[], month: string) {
   const share = (v: number) => (total > 0 ? round2((v / total) * 100) : null);
   const upfrontKeys: ReceiptGroupKey[] = ["dinheiro", "pix", "debito", "boleto_avista"];
   const rows = (Object.keys(RECEIPT_GROUP_LABELS) as ReceiptGroupKey[]).map((key) => {
-    const amount = round2(settled.filter((t) => receiptGroup(t) === key).reduce((s, t) => s + cashValue(t), 0));
-    return { key, label: RECEIPT_GROUP_LABELS[key], amount, percent: share(amount), upfront: upfrontKeys.includes(key) };
+    const amount = round2(
+      settled.filter((t) => receiptGroup(t) === key).reduce((s, t) => s + cashValue(t), 0),
+    );
+    return {
+      key,
+      label: RECEIPT_GROUP_LABELS[key],
+      amount,
+      percent: share(amount),
+      upfront: upfrontKeys.includes(key),
+    };
   });
   const upfront = round2(rows.filter((r) => r.upfront).reduce((s, r) => s + r.amount, 0));
   return {
@@ -751,7 +950,9 @@ export function receiptComposition(txns: Txn[], month: string) {
 /** Pending patient receivables from the selected month on, never including
  * overdue rows (those belong to inadimplência / card confirmation). */
 export function futureReceivables(txns: Txn[], month: string, today = todayISO(), count = 3) {
-  const open = txns.filter((t) => t.kind === "entrada" && t.status === "pendente" && t.due_date >= today);
+  const open = txns.filter(
+    (t) => t.kind === "entrada" && t.status === "pendente" && t.due_date >= today,
+  );
   const keys = nextMonths(month, count + 1);
   const last = keys[keys.length - 1]!;
   const sum = (rows: Txn[]) => round2(rows.reduce((s, t) => s + cashValue(t), 0));
@@ -762,7 +963,19 @@ export function futureReceivables(txns: Txn[], month: string, today = todayISO()
   const laterRows = open.filter((t) => monthKey(t.due_date) > last);
   const later = sum(laterRows);
   const total = round2(months.reduce((s, m) => s + m.amount, 0) + later);
-  return { months, later, laterCount: laterRows.length, total, cardShare: sum(open.filter((t) => monthKey(t.due_date) >= month && (t.payment_method === "credito" || t.payment_method === "debito"))) };
+  return {
+    months,
+    later,
+    laterCount: laterRows.length,
+    total,
+    cardShare: sum(
+      open.filter(
+        (t) =>
+          monthKey(t.due_date) >= month &&
+          (t.payment_method === "credito" || t.payment_method === "debito"),
+      ),
+    ),
+  };
 }
 
 export interface DashboardAlert {
@@ -779,16 +992,58 @@ export function dashboardAlerts(txns: Txn[], today = todayISO()): DashboardAlert
   const sum = (rows: Txn[]) => round2(rows.reduce((s, t) => s + cashValue(t), 0));
   const pending = txns.filter((t) => t.status === "pendente");
   const overdueBills = pending.filter((t) => t.kind === "saida" && t.due_date < today);
-  const weekBills = pending.filter((t) => t.kind === "saida" && t.due_date >= today && t.due_date <= addDays(today, 7));
+  const weekBills = pending.filter(
+    (t) => t.kind === "saida" && t.due_date >= today && t.due_date <= addDays(today, 7),
+  );
   const defaulted = txns.filter((t) => isDefaulted(t, today));
-  const cards = pending.filter((t) => t.kind === "entrada" && (t.payment_method === "credito" || t.payment_method === "debito") && t.due_date < today);
+  const cards = pending.filter(
+    (t) =>
+      t.kind === "entrada" &&
+      (t.payment_method === "credito" || t.payment_method === "debito") &&
+      t.due_date < today,
+  );
   const missing = txns.filter((t) => t.status === "pago" && !t.paid_date);
   const alerts: DashboardAlert[] = [
-    { id: "overdue_bills", tone: "expense", title: "Contas vencidas e não pagas", amount: sum(overdueBills), count: overdueBills.length, to: "/contas" },
-    { id: "defaulted", tone: "warning", title: "Recebimentos de pacientes em atraso", amount: sum(defaulted), count: defaulted.length, to: "/inadimplentes" },
-    { id: "cards_unconfirmed", tone: "warning", title: "Repasses de cartão vencidos sem confirmação", amount: sum(cards), count: cards.length, to: "/cartoes" },
-    { id: "bills_week", tone: "info", title: "Contas que vencem nos próximos 7 dias", amount: sum(weekBills), count: weekBills.length, to: "/contas" },
-    { id: "missing_paid_date", tone: "info", title: "Lançamentos pagos sem data de pagamento", amount: null, count: missing.length, to: "/lancamentos" },
+    {
+      id: "overdue_bills",
+      tone: "expense",
+      title: "Contas vencidas e não pagas",
+      amount: sum(overdueBills),
+      count: overdueBills.length,
+      to: "/contas",
+    },
+    {
+      id: "defaulted",
+      tone: "warning",
+      title: "Recebimentos de pacientes em atraso",
+      amount: sum(defaulted),
+      count: defaulted.length,
+      to: "/inadimplentes",
+    },
+    {
+      id: "cards_unconfirmed",
+      tone: "warning",
+      title: "Repasses de cartão vencidos sem confirmação",
+      amount: sum(cards),
+      count: cards.length,
+      to: "/cartoes",
+    },
+    {
+      id: "bills_week",
+      tone: "info",
+      title: "Contas que vencem nos próximos 7 dias",
+      amount: sum(weekBills),
+      count: weekBills.length,
+      to: "/contas",
+    },
+    {
+      id: "missing_paid_date",
+      tone: "info",
+      title: "Lançamentos pagos sem data de pagamento",
+      amount: null,
+      count: missing.length,
+      to: "/lancamentos",
+    },
   ];
   return alerts.filter((a) => a.count > 0);
 }

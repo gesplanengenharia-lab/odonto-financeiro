@@ -101,6 +101,30 @@ describe("novo lançamento com entrada e saldo", () => {
       due_date: "2050-01-10",
     });
   });
+  it("repete o valor mensal sem dividi-lo e bloqueia duplo envio", async () => {
+    open();
+    fireEvent.click(screen.getByRole("button", { name: "Saída (despesa)" }));
+    fireEvent.change(screen.getByLabelText("Despesa recorrente"), { target: { value: "3" } });
+    expect(screen.queryByLabelText("Parcelas mensais")).not.toBeInTheDocument();
+    let finish!: () => void;
+    state.create.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const form = screen.getByRole("button", { name: "Salvar" }).closest("form")!;
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(state.create).toHaveBeenCalledOnce();
+    expect(
+      state.create.mock.calls[0]![0].map((r: { gross_amount: number }) => r.gross_amount),
+    ).toEqual([1000, 1000, 1000]);
+    finish();
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Salvar" })).not.toBeInTheDocument(),
+    );
+  });
   it("mantém despesa simples sem pagamento com entrada ou repetição", () => {
     open();
     fireEvent.click(screen.getByRole("button", { name: "Saída (despesa)" }));

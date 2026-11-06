@@ -50,7 +50,14 @@ describe("taxas de cartão", () => {
 describe("lançamento parcelado no crédito", () => {
   it("divide R$1.000 em 3x com taxa e recebimento a cada 30 dias", () => {
     const rows = buildLaunchRows(
-      { kind: "entrada", description: "Implante", payment_method: "credito", amount: 1000, date: "2026-11-04", installments: 3 },
+      {
+        kind: "entrada",
+        description: "Implante",
+        payment_method: "credito",
+        amount: 1000,
+        date: "2026-11-04",
+        installments: 3,
+      },
       settings,
       gid,
     );
@@ -64,7 +71,14 @@ describe("lançamento parcelado no crédito", () => {
 
   it("débito cai no dia seguinte com taxa de 1,5%", () => {
     const row = buildLaunchRows(
-      { kind: "entrada", description: "Consulta", payment_method: "debito", amount: 200, date: "2026-11-04", installments: 5 },
+      {
+        kind: "entrada",
+        description: "Consulta",
+        payment_method: "debito",
+        amount: 200,
+        date: "2026-11-04",
+        installments: 5,
+      },
       settings,
       gid,
     )[0]!;
@@ -77,17 +91,39 @@ describe("lançamento parcelado no crédito", () => {
 describe("boletos e despesas fixas", () => {
   it("boleto em 4x vence mensalmente a partir do primeiro vencimento, sem taxa", () => {
     const rows = buildLaunchRows(
-      { kind: "entrada", description: "Ortodontia", payment_method: "boleto", amount: 1200, date: "2026-11-04", first_due_date: "2026-11-10", installments: 4 },
+      {
+        kind: "entrada",
+        description: "Ortodontia",
+        payment_method: "boleto",
+        amount: 1200,
+        date: "2026-11-04",
+        first_due_date: "2026-11-10",
+        installments: 4,
+      },
       settings,
       gid,
     );
-    expect(rows.map((r) => r.due_date)).toEqual(["2026-11-10", "2026-12-10", "2027-01-10", "2027-02-10"]);
+    expect(rows.map((r) => r.due_date)).toEqual([
+      "2026-11-10",
+      "2026-12-10",
+      "2027-01-10",
+      "2027-02-10",
+    ]);
     expect(rows.every((r) => r.fee_amount === 0)).toBe(true);
   });
 
   it("despesa fixa repetida por 12 meses gera 12 lançamentos", () => {
     const rows = buildLaunchRows(
-      { kind: "saida", description: "Aluguel", payment_method: "boleto", nature: "fixa", amount: 4500, date: "2026-11-05", installments: 1, repeat_months: 12 },
+      {
+        kind: "saida",
+        description: "Aluguel",
+        payment_method: "boleto",
+        nature: "fixa",
+        amount: 4500,
+        date: "2026-11-05",
+        installments: 1,
+        repeat_months: 12,
+      },
       settings,
       gid,
     );
@@ -98,7 +134,15 @@ describe("boletos e despesas fixas", () => {
 
   it("pix pago à vista entra como pago", () => {
     const row = buildLaunchRows(
-      { kind: "entrada", description: "Limpeza", payment_method: "pix", amount: 150, date: "2026-11-04", installments: 1, paid: true },
+      {
+        kind: "entrada",
+        description: "Limpeza",
+        payment_method: "pix",
+        amount: 150,
+        date: "2026-11-04",
+        installments: 1,
+        paid: true,
+      },
       settings,
       gid,
     )[0]!;
@@ -113,9 +157,24 @@ describe("boletos e despesas fixas", () => {
 
 describe("inadimplência", () => {
   it("boleto vencido e não pago é inadimplente; cartão não", () => {
-    expect(isDefaulted({ kind: "entrada", status: "pendente", due_date: "2026-10-01", payment_method: "boleto" }, "2026-11-04")).toBe(true);
-    expect(isDefaulted({ kind: "entrada", status: "pendente", due_date: "2026-10-01", payment_method: "credito" }, "2026-11-04")).toBe(false);
-    expect(isDefaulted({ kind: "entrada", status: "pago", due_date: "2026-10-01", payment_method: "boleto" }, "2026-11-04")).toBe(false);
+    expect(
+      isDefaulted(
+        { kind: "entrada", status: "pendente", due_date: "2026-10-01", payment_method: "boleto" },
+        "2026-11-04",
+      ),
+    ).toBe(true);
+    expect(
+      isDefaulted(
+        { kind: "entrada", status: "pendente", due_date: "2026-10-01", payment_method: "credito" },
+        "2026-11-04",
+      ),
+    ).toBe(false);
+    expect(
+      isDefaulted(
+        { kind: "entrada", status: "pago", due_date: "2026-10-01", payment_method: "boleto" },
+        "2026-11-04",
+      ),
+    ).toBe(false);
   });
 });
 
@@ -306,22 +365,51 @@ describe("conferência diária", () => {
   });
 });
 
-
 describe("indicadores e composição de custos", () => {
-  const txn = (overrides: Partial<Txn> = {}) => ({ kind: "entrada", payment_method: "pix", status: "pago", paid_date: "2026-11-02", due_date: "2026-11-01", competence_date: "2026-11-01", gross_amount: 100, net_amount: 100, fee_amount: 0, nature: null, category_id: null, ...overrides }) as Txn;
+  const txn = (overrides: Partial<Txn> = {}) =>
+    ({
+      kind: "entrada",
+      payment_method: "pix",
+      status: "pago",
+      paid_date: "2026-11-02",
+      due_date: "2026-11-01",
+      competence_date: "2026-11-01",
+      gross_amount: 100,
+      net_amount: 100,
+      fee_amount: 0,
+      nature: null,
+      category_id: null,
+      ...overrides,
+    }) as Txn;
   it("compara os recebimentos líquidos, preservando prejuízo e despesas por competência", () => {
-    const cash = [txn(), txn({payment_method: "dinheiro", gross_amount: 50, net_amount: 50}), txn({payment_method: "credito", gross_amount: 60, net_amount: 50, fee_amount: 10}), txn({paid_date: "2026-10-30"})];
-    const comp = [txn(), txn({kind: "saida", nature: "fixa", gross_amount: 120}), txn({kind: "saida", nature: "variavel", gross_amount: 30})];
+    const cash = [
+      txn(),
+      txn({ payment_method: "dinheiro", gross_amount: 50, net_amount: 50 }),
+      txn({ payment_method: "credito", gross_amount: 60, net_amount: 50, fee_amount: 10 }),
+      txn({ paid_date: "2026-10-30" }),
+    ];
+    const comp = [
+      txn(),
+      txn({ kind: "saida", nature: "fixa", gross_amount: 120 }),
+      txn({ kind: "saida", nature: "variavel", gross_amount: 30 }),
+    ];
     const m = dashboardIndicators(cash, comp, "2026-11", "2026-11-04");
-    expect(m.byMethod.find(r => r.method === "pix")?.receivedPct).toBe(50);
-    expect(m.byMethod.find(r => r.method === "dinheiro")?.receivedPct).toBe(25);
-    expect(m.byMethod.find(r => r.method === "credito")?.receivedPct).toBe(25);
+    expect(m.byMethod.find((r) => r.method === "pix")?.receivedPct).toBe(50);
+    expect(m.byMethod.find((r) => r.method === "dinheiro")?.receivedPct).toBe(25);
+    expect(m.byMethod.find((r) => r.method === "credito")?.receivedPct).toBe(25);
     expect(m.profitPct).toBe(-50);
     expect(m.fixedPct).toBe(80);
     expect(m.variablePct).toBe(20);
   });
   it("inadimplência usa a mesma base vencida no mês e exclui cartões e meses anteriores", () => {
-    const rows = [txn({status: "pendente"}), txn({gross_amount: 300}), txn({payment_method: "credito", status: "pendente", gross_amount: 900}), txn({status: "pendente", due_date: "2026-11-04"}), txn({status: "pendente", due_date: "2026-11-20"}), txn({status: "pendente", due_date: "2026-10-01"})];
+    const rows = [
+      txn({ status: "pendente" }),
+      txn({ gross_amount: 300 }),
+      txn({ payment_method: "credito", status: "pendente", gross_amount: 900 }),
+      txn({ status: "pendente", due_date: "2026-11-04" }),
+      txn({ status: "pendente", due_date: "2026-11-20" }),
+      txn({ status: "pendente", due_date: "2026-10-01" }),
+    ];
     const m = dashboardIndicators(rows, [], "2026-11", "2026-11-04");
     expect(m.defaultedAmount).toBe(100);
     expect(m.dueAmount).toBe(400);
@@ -330,35 +418,80 @@ describe("indicadores e composição de custos", () => {
   });
   it("não inventa percentuais para base vazia", () => {
     const m = dashboardIndicators([], [], "2026-11");
-    expect([m.profitPct, m.fixedPct, m.variablePct, m.defaultPct]).toEqual([null,null,null,null]);
-    expect(m.byMethod.every(r => r.receivedPct === null)).toBe(true);
+    expect([m.profitPct, m.fixedPct, m.variablePct, m.defaultPct]).toEqual([
+      null,
+      null,
+      null,
+      null,
+    ]);
+    expect(m.byMethod.every((r) => r.receivedPct === null)).toBe(true);
   });
   it("agrupa categorias pela natureza do lançamento e reconcilia todos os custos", () => {
-    const rows = [txn({kind:"saida",nature:"fixa",category_id:"a",gross_amount:100}),txn({kind:"saida",nature:"fixa",category_id:"a",gross_amount:50}),txn({kind:"saida",nature:"variavel",category_id:"a",gross_amount:30}),txn({kind:"saida",nature:null,gross_amount:20}),txn()];
-    const costs = dashboardCosts(rows,[{id:"a",name:"Serviços"}]);
-    expect(costs.map(g=>g.amount)).toEqual([150,30,20]);
-    expect(costs.map(g=>g.percent)).toEqual([75,15,10]);
-    expect(costs[0]!.rows[0]!).toMatchObject({name:"Serviços",amount:150,percent:75});
+    const rows = [
+      txn({ kind: "saida", nature: "fixa", category_id: "a", gross_amount: 100 }),
+      txn({ kind: "saida", nature: "fixa", category_id: "a", gross_amount: 50 }),
+      txn({ kind: "saida", nature: "variavel", category_id: "a", gross_amount: 30 }),
+      txn({ kind: "saida", nature: null, gross_amount: 20 }),
+      txn(),
+    ];
+    const costs = dashboardCosts(rows, [{ id: "a", name: "Serviços" }]);
+    expect(costs.map((g) => g.amount)).toEqual([150, 30, 20]);
+    expect(costs.map((g) => g.percent)).toEqual([75, 15, 10]);
+    expect(costs[0]!.rows[0]!).toMatchObject({ name: "Serviços", amount: 150, percent: 75 });
     expect(costs[2]!.rows[0]!.name).toBe("Sem categoria");
-    expect(costs.reduce((sum,g)=>sum+g.amount,0)).toBe(summarize(rows).totalExpenses);
+    expect(costs.reduce((sum, g) => sum + g.amount, 0)).toBe(summarize(rows).totalExpenses);
   });
 });
 
 it("parcela cheque sem taxas e considera atraso na inadimplência", () => {
- const rows=buildLaunchRows({kind:"entrada",description:"Cheque",payment_method:"cheque",amount:3500,date:"2026-09-11",first_due_date:"2026-10-01",installments:7},settings,gid);
- expect(rows).toHaveLength(7);
- expect(rows.every(r=>r.gross_amount===500 && r.fee_amount===0 && r.status==="pendente")).toBe(true);
- expect(rows[6]!.due_date).toBe("2027-04-01");
- expect(isDefaulted(rows[0]!,"2026-11-01")).toBe(true);
+  const rows = buildLaunchRows(
+    {
+      kind: "entrada",
+      description: "Cheque",
+      payment_method: "cheque",
+      amount: 3500,
+      date: "2026-09-11",
+      first_due_date: "2026-10-01",
+      installments: 7,
+    },
+    settings,
+    gid,
+  );
+  expect(rows).toHaveLength(7);
+  expect(
+    rows.every((r) => r.gross_amount === 500 && r.fee_amount === 0 && r.status === "pendente"),
+  ).toBe(true);
+  expect(rows[6]!.due_date).toBe("2027-04-01");
+  expect(isDefaulted(rows[0]!, "2026-11-01")).toBe(true);
 });
 
 describe("faturamento por competência e caixa em dinheiro/Pix", () => {
-  const txn = (overrides: Partial<Txn> = {}) => ({ kind: "entrada", payment_method: "pix", status: "pago", paid_date: "2026-11-02", due_date: "2026-11-01", competence_date: "2026-11-01", gross_amount: 100, net_amount: 100, fee_amount: 0, nature: null, category_id: null, ...overrides }) as Txn;
+  const txn = (overrides: Partial<Txn> = {}) =>
+    ({
+      kind: "entrada",
+      payment_method: "pix",
+      status: "pago",
+      paid_date: "2026-11-02",
+      due_date: "2026-11-01",
+      competence_date: "2026-11-01",
+      gross_amount: 100,
+      net_amount: 100,
+      fee_amount: 0,
+      nature: null,
+      category_id: null,
+      ...overrides,
+    }) as Txn;
 
   it("faturamento soma o valor bruto pela competência, incluindo parcelas futuras", () => {
     const rows = [
       txn(),
-      txn({ payment_method: "credito", status: "pendente", paid_date: null, due_date: "2027-01-01", gross_amount: 300 }),
+      txn({
+        payment_method: "credito",
+        status: "pendente",
+        paid_date: null,
+        due_date: "2027-01-01",
+        gross_amount: 300,
+      }),
       txn({ competence_date: "2026-10-31", gross_amount: 999 }),
       txn({ kind: "saida", gross_amount: 50 }),
     ];
@@ -376,8 +509,20 @@ describe("faturamento por competência e caixa em dinheiro/Pix", () => {
       txn({ payment_method: "dinheiro", gross_amount: 200, net_amount: 200 }),
       txn({ payment_method: "boleto", installment_total: 2, gross_amount: 1000, net_amount: 1000 }),
       txn({ kind: "saida", gross_amount: 300 }),
-      txn({ kind: "saida", status: "pendente", paid_date: null, due_date: "2026-11-20", gross_amount: 250 }),
-      txn({ kind: "saida", status: "pendente", paid_date: null, due_date: "2026-10-10", gross_amount: 100 }),
+      txn({
+        kind: "saida",
+        status: "pendente",
+        paid_date: null,
+        due_date: "2026-11-20",
+        gross_amount: 250,
+      }),
+      txn({
+        kind: "saida",
+        status: "pendente",
+        paid_date: null,
+        due_date: "2026-10-10",
+        gross_amount: 100,
+      }),
     ];
     const c = cashPixMonth(rows, "2026-11", "2026-11-05");
     expect(c.received).toBe(700);
@@ -388,188 +533,553 @@ describe("faturamento por competência e caixa em dinheiro/Pix", () => {
   });
 });
 
-
 it("mantém venda parcelada integral na competência e recebimentos nos meses correspondentes", () => {
-  const rows: Txn[] = buildLaunchRows({kind:"entrada",description:"Venda parcelada",payment_method:"credito",
-    amount:1000,date:"2026-08-10",installments:3},settings,gid).map((r,i) => ({...r,id:`credit-${i}`,
-      status: i === 0 ? "pago" : "pendente", paid_date: i === 0 ? "2026-09-09" : null}));
-  expect(monthBilling(rows,"2026-08").total).toBe(1000);
-  expect(monthBilling(rows,"2026-09").total).toBe(0);
-  expect(monthBilling(rows,"2026-08").byMethod.find(r=>r.method==="credito")?.percent).toBe(100);
-  expect(dashboardMonth(rows,"2026-08","2026-09-10").received).toBe(0);
-  expect(dashboardMonth(rows,"2026-09","2026-09-10").received).toBe(rows[0]!.net_amount);
-  expect(cashPixMonth(rows,"2026-09","2026-09-10").received).toBe(0);
+  const rows: Txn[] = buildLaunchRows(
+    {
+      kind: "entrada",
+      description: "Venda parcelada",
+      payment_method: "credito",
+      amount: 1000,
+      date: "2026-08-10",
+      installments: 3,
+    },
+    settings,
+    gid,
+  ).map((r, i) => ({
+    ...r,
+    id: `credit-${i}`,
+    status: i === 0 ? "pago" : "pendente",
+    paid_date: i === 0 ? "2026-09-09" : null,
+  }));
+  expect(monthBilling(rows, "2026-08").total).toBe(1000);
+  expect(monthBilling(rows, "2026-09").total).toBe(0);
+  expect(monthBilling(rows, "2026-08").byMethod.find((r) => r.method === "credito")?.percent).toBe(
+    100,
+  );
+  expect(dashboardMonth(rows, "2026-08", "2026-09-10").received).toBe(0);
+  expect(dashboardMonth(rows, "2026-09", "2026-09-10").received).toBe(rows[0]!.net_amount);
+  expect(cashPixMonth(rows, "2026-09", "2026-09-10").received).toBe(0);
 });
 
 it("separa dinheiro/Pix pendentes e pagamentos de outros meses do caixa selecionado", () => {
-  const rows: Txn[] = buildLaunchRows({kind:"entrada",description:"Pix parcelado",payment_method:"pix",
-    amount:300,date:"2026-08-10",first_due_date:"2026-08-10",installments:3},settings,gid).map((r,i) => ({...r,id:`pix-${i}`,
-      status:i<2?"pago":"pendente",paid_date:i===0?"2026-08-10":i===1?"2026-09-10":null}));
-  expect(monthBilling(rows,"2026-08").total).toBe(300);
-  expect(monthBilling(rows,"2026-09").total).toBe(0);
-  expect(cashPixMonth(rows,"2026-08","2026-09-11").received).toBe(100);
-  expect(cashPixMonth(rows,"2026-09","2026-09-11").received).toBe(100);
-  expect(cashPixMonth(rows,"2026-10","2026-09-11").received).toBe(0);
+  const rows: Txn[] = buildLaunchRows(
+    {
+      kind: "entrada",
+      description: "Pix parcelado",
+      payment_method: "pix",
+      amount: 300,
+      date: "2026-08-10",
+      first_due_date: "2026-08-10",
+      installments: 3,
+    },
+    settings,
+    gid,
+  ).map((r, i) => ({
+    ...r,
+    id: `pix-${i}`,
+    status: i < 2 ? "pago" : "pendente",
+    paid_date: i === 0 ? "2026-08-10" : i === 1 ? "2026-09-10" : null,
+  }));
+  expect(monthBilling(rows, "2026-08").total).toBe(300);
+  expect(monthBilling(rows, "2026-09").total).toBe(0);
+  expect(cashPixMonth(rows, "2026-08", "2026-09-11").received).toBe(100);
+  expect(cashPixMonth(rows, "2026-09", "2026-09-11").received).toBe(100);
+  expect(cashPixMonth(rows, "2026-10", "2026-09-11").received).toBe(0);
 });
 
-
 it("inclui débito líquido no caixa imediato, pela data de recebimento, sem antecipar pendências", () => {
-  const debit: Txn = { ...buildLaunchRows({kind:"entrada",description:"Débito",payment_method:"debito",
-    amount:1000,date:"2026-10-31",installments:1},settings,gid)[0]!, id:"debit",status:"pago",paid_date:"2026-11-01" };
-  const rows = [debit,
-    {...debit,id:"cash",payment_method:"dinheiro" as const,gross_amount:50,net_amount:50,fee_amount:0},
-    {...debit,id:"pix",payment_method:"pix" as const,gross_amount:100,net_amount:100,fee_amount:0},
-    {...debit,id:"pending",status:"pendente" as const,paid_date:null,due_date:"2026-11-20",gross_amount:200,fee_amount:3,net_amount:197},
-    {...debit,id:"overdue",status:"pendente" as const,paid_date:null,due_date:"2026-11-01",gross_amount:100,fee_amount:1.5,net_amount:98.5},
-    {...debit,id:"old",paid_date:"2026-10-30"},
-    {...debit,id:"credit",payment_method:"credito" as const},
-    {...debit,id:"expense",kind:"saida" as const,gross_amount:400,net_amount:400,fee_amount:0},
+  const debit: Txn = {
+    ...buildLaunchRows(
+      {
+        kind: "entrada",
+        description: "Débito",
+        payment_method: "debito",
+        amount: 1000,
+        date: "2026-10-31",
+        installments: 1,
+      },
+      settings,
+      gid,
+    )[0]!,
+    id: "debit",
+    status: "pago",
+    paid_date: "2026-11-01",
+  };
+  const rows = [
+    debit,
+    {
+      ...debit,
+      id: "cash",
+      payment_method: "dinheiro" as const,
+      gross_amount: 50,
+      net_amount: 50,
+      fee_amount: 0,
+    },
+    {
+      ...debit,
+      id: "pix",
+      payment_method: "pix" as const,
+      gross_amount: 100,
+      net_amount: 100,
+      fee_amount: 0,
+    },
+    {
+      ...debit,
+      id: "pending",
+      status: "pendente" as const,
+      paid_date: null,
+      due_date: "2026-11-20",
+      gross_amount: 200,
+      fee_amount: 3,
+      net_amount: 197,
+    },
+    {
+      ...debit,
+      id: "overdue",
+      status: "pendente" as const,
+      paid_date: null,
+      due_date: "2026-11-01",
+      gross_amount: 100,
+      fee_amount: 1.5,
+      net_amount: 98.5,
+    },
+    { ...debit, id: "old", paid_date: "2026-10-30" },
+    { ...debit, id: "credit", payment_method: "credito" as const },
+    {
+      ...debit,
+      id: "expense",
+      kind: "saida" as const,
+      gross_amount: 400,
+      net_amount: 400,
+      fee_amount: 0,
+    },
   ];
-  const cash = cashPixMonth(rows,"2026-11","2026-11-05");
+  const cash = cashPixMonth(rows, "2026-11", "2026-11-05");
   expect(cash.debito).toBe(985);
   expect(cash.received).toBe(1135);
   expect(cash.expected).toBe(197);
   expect(cash.balance).toBe(735);
   expect(cash.projectedBalance).toBe(932);
-  expect(cash.entries.map(t=>t.id).sort()).toEqual(["cash","debit","pix"]);
+  expect(cash.entries.map((t) => t.id).sort()).toEqual(["cash", "debit", "pix"]);
 });
-
 
 describe("entrada e saldo restante da venda", () => {
-  const sale = {kind:"entrada" as const,description:"Tratamento",person:"Paciente",category_id:"cat",payment_method:"credito" as const,
-    amount:1000,date:"2026-11-05",installments:4,paid:false};
+  const sale = {
+    kind: "entrada" as const,
+    description: "Tratamento",
+    person: "Paciente",
+    category_id: "cat",
+    payment_method: "credito" as const,
+    amount: 1000,
+    date: "2026-11-05",
+    installments: 4,
+    paid: false,
+  };
   it("gera entrada Pix e somente o saldo parcelado no cartão, sem duplicar competência", () => {
-    const plan = buildLaunchPlan({...sale,down_payment:{amount:200,payment_method:"pix",first_due_date:"2026-11-05",paid:true}},settings,()=>"sale");
-    expect(plan.remaining).toBe(800);expect(plan.rows).toHaveLength(5);
-    expect(plan.rows[0]).toMatchObject({gross_amount:200,net_amount:200,fee_amount:0,status:"pago",payment_method:"pix"});
-    expect(plan.rows.slice(1).every(r=>r.gross_amount===200&&r.fee_amount===9&&r.net_amount===191&&r.status==="pendente")).toBe(true);
-    expect(new Set(plan.rows.map(r=>r.group_id))).toEqual(new Set(["sale"]));
-    expect(plan.rows.every(r=>r.competence_date===sale.date&&r.person==="Paciente"&&r.category_id==="cat")).toBe(true);
-    const rows=plan.rows.map((r,i)=>({...r,id:String(i)}));
-    expect(monthBilling(rows,"2026-11").total).toBe(1000);
-    expect(dashboardMonth(rows,"2026-11","2026-11-05").received).toBe(200);
-    expect(rows.reduce((v,r)=>v+r.net_amount,0)).toBe(964);
+    const plan = buildLaunchPlan(
+      {
+        ...sale,
+        down_payment: {
+          amount: 200,
+          payment_method: "pix",
+          first_due_date: "2026-11-05",
+          paid: true,
+        },
+      },
+      settings,
+      () => "sale",
+    );
+    expect(plan.remaining).toBe(800);
+    expect(plan.rows).toHaveLength(5);
+    expect(plan.rows[0]).toMatchObject({
+      gross_amount: 200,
+      net_amount: 200,
+      fee_amount: 0,
+      status: "pago",
+      payment_method: "pix",
+    });
+    expect(
+      plan.rows
+        .slice(1)
+        .every(
+          (r) =>
+            r.gross_amount === 200 &&
+            r.fee_amount === 9 &&
+            r.net_amount === 191 &&
+            r.status === "pendente",
+        ),
+    ).toBe(true);
+    expect(new Set(plan.rows.map((r) => r.group_id))).toEqual(new Set(["sale"]));
+    expect(
+      plan.rows.every(
+        (r) =>
+          r.competence_date === sale.date && r.person === "Paciente" && r.category_id === "cat",
+      ),
+    ).toBe(true);
+    const rows = plan.rows.map((r, i) => ({ ...r, id: String(i) }));
+    expect(monthBilling(rows, "2026-11").total).toBe(1000);
+    expect(dashboardMonth(rows, "2026-11", "2026-11-05").received).toBe(200);
+    expect(rows.reduce((v, r) => v + r.net_amount, 0)).toBe(964);
   });
-  it.each(["pix","dinheiro","boleto","cheque","credito","debito"] as const)("aceita entrada em %s com taxas próprias e saldo em boleto", method => {
-    const plan=buildLaunchPlan({...sale,payment_method:"boleto",first_due_date:"2026-12-05",installments:3,
-      down_payment:{amount:200,payment_method:method,first_due_date:"2026-11-20",paid:false}},settings,()=>"sale");
-    expect(plan.rows).toHaveLength(4);expect(plan.rows[0]!.payment_method).toBe(method);
-    expect(plan.rows.slice(1).map(r=>r.due_date)).toEqual(["2026-12-05","2027-01-05","2027-02-05"]);
-    expect(plan.rows.slice(1).map(r=>r.gross_amount)).toEqual([266.66,266.66,266.68]);
-    expect(plan.rows.reduce((s,r)=>Math.round(s+r.gross_amount*100),0)).toBe(100000);
-    expect(plan.rows.slice(1).every(r=>r.fee_amount===0)).toBe(true);
-    if(method==="credito")expect(plan.rows[0]!.fee_amount).toBe(6.4);
-    if(method==="debito")expect(plan.rows[0]!.fee_amount).toBe(3);
+  it.each(["pix", "dinheiro", "boleto", "cheque", "credito", "debito"] as const)(
+    "aceita entrada em %s com taxas próprias e saldo em boleto",
+    (method) => {
+      const plan = buildLaunchPlan(
+        {
+          ...sale,
+          payment_method: "boleto",
+          first_due_date: "2026-12-05",
+          installments: 3,
+          down_payment: {
+            amount: 200,
+            payment_method: method,
+            first_due_date: "2026-11-20",
+            paid: false,
+          },
+        },
+        settings,
+        () => "sale",
+      );
+      expect(plan.rows).toHaveLength(4);
+      expect(plan.rows[0]!.payment_method).toBe(method);
+      expect(plan.rows.slice(1).map((r) => r.due_date)).toEqual([
+        "2026-12-05",
+        "2027-01-05",
+        "2027-02-05",
+      ]);
+      expect(plan.rows.slice(1).map((r) => r.gross_amount)).toEqual([266.66, 266.66, 266.68]);
+      expect(plan.rows.reduce((s, r) => Math.round(s + r.gross_amount * 100), 0)).toBe(100000);
+      expect(plan.rows.slice(1).every((r) => r.fee_amount === 0)).toBe(true);
+      if (method === "credito") expect(plan.rows[0]!.fee_amount).toBe(6.4);
+      if (method === "debito") expect(plan.rows[0]!.fee_amount).toBe(3);
+    },
+  );
+  it("rejeita recorrência de venda para evitar multiplicar seu faturamento", () => {
+    expect(() => buildLaunchPlan({ ...sale, repeat_months: 12 }, settings, () => "sale")).toThrow(
+      "Recorrência",
+    );
   });
-  it("ignora recorrência no novo plano e cria só as parcelas escolhidas", () => {
-    const plan=buildLaunchPlan({...sale,repeat_months:12},settings,()=>"sale");
-    expect(plan.rows).toHaveLength(4);expect(plan.rows.reduce((s,r)=>s+r.gross_amount,0)).toBe(1000);
+  it.each([0, -1, 1000, 1100, Number.NaN])("bloqueia entrada inválida %s", (amount) => {
+    expect(() =>
+      buildLaunchPlan(
+        { ...sale, down_payment: { amount, payment_method: "pix" } },
+        settings,
+        () => "sale",
+      ),
+    ).toThrow();
   });
-  it.each([0,-1,1000,1100,Number.NaN])("bloqueia entrada inválida %s",amount=>{
-    expect(()=>buildLaunchPlan({...sale,down_payment:{amount,payment_method:"pix"}},settings,()=>"sale")).toThrow();
-  });
-  it("permite saldo em dinheiro/Pix parcelado e não arredonda a venda para cima",()=>{
-    const plan=buildLaunchPlan({...sale,amount:100.01,payment_method:"pix",first_due_date:"2026-12-05",installments:3,
-      down_payment:{amount:20,payment_method:"dinheiro",paid:true}},settings,()=>"sale");
-    expect(plan.rows.map(r=>r.gross_amount)).toEqual([20,26.67,26.67,26.67]);
+  it("permite saldo em dinheiro/Pix parcelado e não arredonda a venda para cima", () => {
+    const plan = buildLaunchPlan(
+      {
+        ...sale,
+        amount: 100.01,
+        payment_method: "pix",
+        first_due_date: "2026-12-05",
+        installments: 3,
+        down_payment: { amount: 20, payment_method: "dinheiro", paid: true },
+      },
+      settings,
+      () => "sale",
+    );
+    expect(plan.rows.map((r) => r.gross_amount)).toEqual([20, 26.67, 26.67, 26.67]);
   });
 });
 
-
 it("inclui boleto em parcela única pelo recebimento e separa parcelas, pendências e meses", () => {
-  const boleto: Txn = {...buildLaunchRows({kind:"entrada", description:"Boleto à vista", payment_method:"boleto",
-    amount:1450, date:"2026-10-15", installments:1, paid:true}, settings, gid)[0]!, id:"vista"};
-  const rows: Txn[] = [boleto,
-    {...boleto,id:"parcela",installment_total:3},
-    {...boleto,id:"outro-mes",paid_date:"2026-09-30"},
-    {...boleto,id:"pendente",status:"pendente",paid_date:null,due_date:"2026-10-25",gross_amount:100,net_amount:100},
-    {...boleto,id:"atrasado",status:"pendente",paid_date:null,due_date:"2026-10-01",gross_amount:200,net_amount:200},
-    {...boleto,id:"parcela-pendente",installment_total:3,status:"pendente",paid_date:null,due_date:"2026-10-25"},
-    {...boleto,id:"despesa",kind:"saida",gross_amount:500,net_amount:500},
+  const boleto: Txn = {
+    ...buildLaunchRows(
+      {
+        kind: "entrada",
+        description: "Boleto à vista",
+        payment_method: "boleto",
+        amount: 1450,
+        date: "2026-10-15",
+        installments: 1,
+        paid: true,
+      },
+      settings,
+      gid,
+    )[0]!,
+    id: "vista",
+  };
+  const rows: Txn[] = [
+    boleto,
+    { ...boleto, id: "parcela", installment_total: 3 },
+    { ...boleto, id: "outro-mes", paid_date: "2026-09-30" },
+    {
+      ...boleto,
+      id: "pendente",
+      status: "pendente",
+      paid_date: null,
+      due_date: "2026-10-25",
+      gross_amount: 100,
+      net_amount: 100,
+    },
+    {
+      ...boleto,
+      id: "atrasado",
+      status: "pendente",
+      paid_date: null,
+      due_date: "2026-10-01",
+      gross_amount: 200,
+      net_amount: 200,
+    },
+    {
+      ...boleto,
+      id: "parcela-pendente",
+      installment_total: 3,
+      status: "pendente",
+      paid_date: null,
+      due_date: "2026-10-25",
+    },
+    { ...boleto, id: "despesa", kind: "saida", gross_amount: 500, net_amount: 500 },
   ];
-  const cash=cashPixMonth(rows,"2026-10","2026-10-20");
+  const cash = cashPixMonth(rows, "2026-10", "2026-10-20");
   expect(cash.boletoAvista).toBe(1450);
   expect(cash.received).toBe(1450);
   expect(cash.expected).toBe(100);
   expect(cash.balance).toBe(950);
   expect(cash.projectedBalance).toBe(1050);
   expect(cash.coveragePct).toBe(290);
-  expect(cash.entries.map(t=>t.id)).toEqual(["vista"]);
-  expect(dashboardMonth(rows,"2026-10","2026-10-20").received).toBe(2900);
+  expect(cash.entries.map((t) => t.id)).toEqual(["vista"]);
+  expect(dashboardMonth(rows, "2026-10", "2026-10-20").received).toBe(2900);
 });
 
 it("agenda de boletos separa pagamento, vencimento e pendências durante 24 meses", () => {
-  const boleto: Txn = {...buildLaunchRows({kind:"entrada",description:"Boleto",payment_method:"boleto",
-    amount:100,date:"2026-10-01",installments:1,paid:false},settings,gid)[0]!,id:"open"};
-  const rows: Txn[] = [boleto,
-    {...boleto,id:"late",due_date:"2026-09-15",net_amount:40},
-    {...boleto,id:"received",status:"pago",due_date:"2026-09-20",paid_date:"2026-10-02",net_amount:80},
-    {...boleto,id:"paid-elsewhere",status:"pago",paid_date:"2026-11-01"},
-    {...boleto,id:"future",due_date:"2027-01-10",installment_total:12,net_amount:200},
-    {...boleto,id:"last",due_date:"2028-09-30",net_amount:300},
-    {...boleto,id:"outside",due_date:"2028-10-01",net_amount:999},
-    {...boleto,id:"expense",kind:"saida",net_amount:1000},
-    {...boleto,id:"credit",payment_method:"credito",net_amount:2000},
+  const boleto: Txn = {
+    ...buildLaunchRows(
+      {
+        kind: "entrada",
+        description: "Boleto",
+        payment_method: "boleto",
+        amount: 100,
+        date: "2026-10-01",
+        installments: 1,
+        paid: false,
+      },
+      settings,
+      gid,
+    )[0]!,
+    id: "open",
+  };
+  const rows: Txn[] = [
+    boleto,
+    { ...boleto, id: "late", due_date: "2026-09-15", net_amount: 40 },
+    {
+      ...boleto,
+      id: "received",
+      status: "pago",
+      due_date: "2026-09-20",
+      paid_date: "2026-10-02",
+      net_amount: 80,
+    },
+    { ...boleto, id: "paid-elsewhere", status: "pago", paid_date: "2026-11-01" },
+    { ...boleto, id: "future", due_date: "2027-01-10", installment_total: 12, net_amount: 200 },
+    { ...boleto, id: "last", due_date: "2028-09-30", net_amount: 300 },
+    { ...boleto, id: "outside", due_date: "2028-10-01", net_amount: 999 },
+    { ...boleto, id: "expense", kind: "saida", net_amount: 1000 },
+    { ...boleto, id: "credit", payment_method: "credito", net_amount: 2000 },
   ];
-  const a=boletoReceivables(rows,"2026-10","2026-10-05");
-  expect(a.received).toBe(80);expect(a.open).toBe(100);expect(a.future).toBe(500);expect(a.overdue).toBe(140);
-  expect(a.monthRows.map(t=>t.id)).toEqual(["open","paid-elsewhere"]);
+  const a = boletoReceivables(rows, "2026-10", "2026-10-05");
+  expect(a.received).toBe(80);
+  expect(a.open).toBe(100);
+  expect(a.future).toBe(500);
+  expect(a.overdue).toBe(140);
+  expect(a.monthRows.map((t) => t.id)).toEqual(["open", "paid-elsewhere"]);
   expect(a.projection).toHaveLength(24);
-  expect(a.projection[23]).toEqual({month:"2028-09",amount:300,count:1});
-  expect(boletoReceivables(rows,"2027-01","2026-10-05").open).toBe(200);
-  expect(boletoReceivables([],"2026-10").projection.every(row=>row.amount===0&&row.count===0)).toBe(true);
+  expect(a.projection[23]).toEqual({ month: "2028-09", amount: 300, count: 1 });
+  expect(boletoReceivables(rows, "2027-01", "2026-10-05").open).toBe(200);
+  expect(
+    boletoReceivables([], "2026-10").projection.every((row) => row.amount === 0 && row.count === 0),
+  ).toBe(true);
 });
 
 it("inadimplência mensal acompanha a baixa desfeita sem duplicar ou antecipar parcelas", () => {
-  const paid: Txn = {...buildLaunchRows({kind:"entrada",description:"Boleto",person:"Paciente A",payment_method:"boleto",
-    amount:150,date:"2026-10-15",installments:1,paid:true},settings,gid)[0]!,id:"a"};
-  const undone={...paid,status:"pendente" as const,paid_date:null};
-  const rows: Txn[] = [undone,{...undone,id:"b",person:"Paciente B",due_date:"2026-09-15",gross_amount:200},
-    {...undone,id:"today",due_date:"2026-11-05"},{...undone,id:"future",due_date:"2026-12-05"},
-    {...undone,id:"expense",kind:"saida"},{...undone,id:"card",payment_method:"credito"}];
-  expect(defaultedReceivables([paid],"2026-10",false,"2026-11-05").total).toBe(0);
-  const a=defaultedReceivables(rows,"2026-10",false,"2026-11-05");
-  expect(a.total).toBe(350);expect(a.monthTotal).toBe(150);expect(a.groups).toHaveLength(2);
-  const m=defaultedReceivables(rows,"2026-10",true,"2026-11-05");
-  expect(m.groups.map(g=>g.person)).toEqual(["Paciente A"]);expect(m.groups[0]!.total).toBe(150);
-  expect(defaultedReceivables(rows,"2026-09",true,"2026-11-05").monthTotal).toBe(200);
-  expect(defaultedReceivables([paid,...rows.slice(1)],"2026-10",true,"2026-11-05").groups).toHaveLength(0);
+  const paid: Txn = {
+    ...buildLaunchRows(
+      {
+        kind: "entrada",
+        description: "Boleto",
+        person: "Paciente A",
+        payment_method: "boleto",
+        amount: 150,
+        date: "2026-10-15",
+        installments: 1,
+        paid: true,
+      },
+      settings,
+      gid,
+    )[0]!,
+    id: "a",
+  };
+  const undone = { ...paid, status: "pendente" as const, paid_date: null };
+  const rows: Txn[] = [
+    undone,
+    { ...undone, id: "b", person: "Paciente B", due_date: "2026-09-15", gross_amount: 200 },
+    { ...undone, id: "today", due_date: "2026-11-05" },
+    { ...undone, id: "future", due_date: "2026-12-05" },
+    { ...undone, id: "expense", kind: "saida" },
+    { ...undone, id: "card", payment_method: "credito" },
+  ];
+  expect(defaultedReceivables([paid], "2026-10", false, "2026-11-05").total).toBe(0);
+  const a = defaultedReceivables(rows, "2026-10", false, "2026-11-05");
+  expect(a.total).toBe(350);
+  expect(a.monthTotal).toBe(150);
+  expect(a.groups).toHaveLength(2);
+  const m = defaultedReceivables(rows, "2026-10", true, "2026-11-05");
+  expect(m.groups.map((g) => g.person)).toEqual(["Paciente A"]);
+  expect(m.groups[0]!.total).toBe(150);
+  expect(defaultedReceivables(rows, "2026-09", true, "2026-11-05").monthTotal).toBe(200);
+  expect(
+    defaultedReceivables([paid, ...rows.slice(1)], "2026-10", true, "2026-11-05").groups,
+  ).toHaveLength(0);
 });
 
 it("projeção conserva o critério da simulação e desconta contas antigas uma única vez", () => {
-  const row: Txn={...buildLaunchRows({kind:"entrada",description:"Pix",payment_method:"pix",amount:100,date:"2026-11-01",installments:1,paid:true},settings,gid)[0]!,id:"a"};
-  const rows: Txn[]=[row,{...row,id:"old-bill",kind:"saida",nature:"fixa",status:"pendente",paid_date:null,due_date:"2026-10-10",gross_amount:200,net_amount:200},
-    {...row,id:"overdue",status:"pendente",paid_date:null,due_date:"2026-11-01",net_amount:900,gross_amount:900},
-    {...row,id:"future",status:"pendente",paid_date:null,due_date:"2026-12-10",net_amount:300,gross_amount:300}];
-  const p=cashFlowProjection(rows,"2026-11",3,500,"2026-11-05");
-  expect(p[0]!.balance).toBe(dashboardFunding(dashboardMonth(rows,"2026-11","2026-11-05").projected,500).closing);
-  expect(p[0]).toMatchObject({other:100,fixed:200,result:-100,balance:400});
-  expect(p[1]).toMatchObject({other:300,fixed:0,result:300,balance:700});
+  const row: Txn = {
+    ...buildLaunchRows(
+      {
+        kind: "entrada",
+        description: "Pix",
+        payment_method: "pix",
+        amount: 100,
+        date: "2026-11-01",
+        installments: 1,
+        paid: true,
+      },
+      settings,
+      gid,
+    )[0]!,
+    id: "a",
+  };
+  const rows: Txn[] = [
+    row,
+    {
+      ...row,
+      id: "old-bill",
+      kind: "saida",
+      nature: "fixa",
+      status: "pendente",
+      paid_date: null,
+      due_date: "2026-10-10",
+      gross_amount: 200,
+      net_amount: 200,
+    },
+    {
+      ...row,
+      id: "overdue",
+      status: "pendente",
+      paid_date: null,
+      due_date: "2026-11-01",
+      net_amount: 900,
+      gross_amount: 900,
+    },
+    {
+      ...row,
+      id: "future",
+      status: "pendente",
+      paid_date: null,
+      due_date: "2026-12-10",
+      net_amount: 300,
+      gross_amount: 300,
+    },
+  ];
+  const p = cashFlowProjection(rows, "2026-11", 3, 500, "2026-11-05");
+  expect(p[0]!.balance).toBe(
+    dashboardFunding(dashboardMonth(rows, "2026-11", "2026-11-05").projected, 500).closing,
+  );
+  expect(p[0]).toMatchObject({ other: 100, fixed: 200, result: -100, balance: 400 });
+  expect(p[1]).toMatchObject({ other: 300, fixed: 0, result: 300, balance: 700 });
   expect(p[2]!.balance).toBe(700);
 });
-it("agenda de cartões distingue valores recebidos de parcelas futuras e acompanha o mês",()=>{
-  const row: Txn={...buildLaunchRows({kind:"entrada",description:"Cartão",payment_method:"credito",amount:100,date:"2026-10-01",installments:1},settings,gid)[0]!,id:"a",status:"pago",paid_date:"2026-11-01",net_amount:96.8};
-  const rows: Txn[]=[row,{...row,id:"pending",status:"pendente",paid_date:null,due_date:"2026-12-10"},{...row,id:"pix",payment_method:"pix"}];
-  const a=cardReceivables(rows,"2026-11","2026-11-05");
-  expect(a.received).toBe(96.8);expect(a.open).toBe(0);expect(a.future).toBe(96.8);
-  expect(a.projection[1]).toEqual({month:"2026-12",amount:96.8});
-  expect(cardReceivables(rows,"2026-12","2026-11-05").open).toBe(96.8);
+it("agenda de cartões distingue valores recebidos de parcelas futuras e acompanha o mês", () => {
+  const row: Txn = {
+    ...buildLaunchRows(
+      {
+        kind: "entrada",
+        description: "Cartão",
+        payment_method: "credito",
+        amount: 100,
+        date: "2026-10-01",
+        installments: 1,
+      },
+      settings,
+      gid,
+    )[0]!,
+    id: "a",
+    status: "pago",
+    paid_date: "2026-11-01",
+    net_amount: 96.8,
+  };
+  const rows: Txn[] = [
+    row,
+    { ...row, id: "pending", status: "pendente", paid_date: null, due_date: "2026-12-10" },
+    { ...row, id: "pix", payment_method: "pix" },
+  ];
+  const a = cardReceivables(rows, "2026-11", "2026-11-05");
+  expect(a.received).toBe(96.8);
+  expect(a.open).toBe(0);
+  expect(a.future).toBe(96.8);
+  expect(a.projection[1]).toEqual({ month: "2026-12", amount: 96.8 });
+  expect(cardReceivables(rows, "2026-12", "2026-11-05").open).toBe(96.8);
 });
-it("edição preserva a regra do líquido e rejeita valor, taxa e data inválidos",()=>{
-  const original: Txn={...buildLaunchRows({kind:"entrada",description:"Venda",payment_method:"credito",amount:100,date:"2026-11-01",installments:1},settings,gid)[0]!,id:"edit"};
-  const input={description:" Ajustado ",person:" Paciente ",category_id:null,nature:null,competence_date:"2026-11-01",due_date:"2026-12-10",gross_amount:200,fee_amount:10};
-  expect(transactionDetails(original,input)).toMatchObject({description:"Ajustado",person:"Paciente",net_amount:190});
-  expect(()=>transactionDetails(original,{...input,fee_amount:201})).toThrow();
-  expect(()=>transactionDetails(original,{...input,gross_amount:Number.NaN})).toThrow();
-  expect(()=>transactionDetails(original,{...input,competence_date:"2026-02-30"})).toThrow();
-  expect(transactionDetails({...original,kind:"saida"},input).net_amount).toBe(200);
+it("edição preserva a regra do líquido e rejeita valor, taxa e data inválidos", () => {
+  const original: Txn = {
+    ...buildLaunchRows(
+      {
+        kind: "entrada",
+        description: "Venda",
+        payment_method: "credito",
+        amount: 100,
+        date: "2026-11-01",
+        installments: 1,
+      },
+      settings,
+      gid,
+    )[0]!,
+    id: "edit",
+  };
+  const input = {
+    description: " Ajustado ",
+    person: " Paciente ",
+    category_id: null,
+    nature: null,
+    competence_date: "2026-11-01",
+    due_date: "2026-12-10",
+    gross_amount: 200,
+    fee_amount: 10,
+  };
+  expect(transactionDetails(original, input)).toMatchObject({
+    description: "Ajustado",
+    person: "Paciente",
+    net_amount: 190,
+  });
+  expect(() => transactionDetails(original, { ...input, fee_amount: 201 })).toThrow();
+  expect(() => transactionDetails(original, { ...input, gross_amount: Number.NaN })).toThrow();
+  expect(() => transactionDetails(original, { ...input, competence_date: "2026-02-30" })).toThrow();
+  expect(transactionDetails({ ...original, kind: "saida" }, input).net_amount).toBe(200);
 });
 
 describe("painel executivo", () => {
   const row = (patch: Partial<Txn> = {}): Txn => ({
-    id: Math.random().toString(36), kind: "entrada", description: "Teste", person: null, category_id: null, nature: null,
-    payment_method: "pix", status: "pago", competence_date: "2026-11-01", due_date: "2026-11-10", paid_date: "2026-11-10",
-    gross_amount: 100, fee_amount: 0, net_amount: 100, installment_number: 1, installment_total: 1, group_id: null, notes: null,
+    id: Math.random().toString(36),
+    kind: "entrada",
+    description: "Teste",
+    person: null,
+    category_id: null,
+    nature: null,
+    payment_method: "pix",
+    status: "pago",
+    competence_date: "2026-11-01",
+    due_date: "2026-11-10",
+    paid_date: "2026-11-10",
+    gross_amount: 100,
+    fee_amount: 0,
+    net_amount: 100,
+    installment_number: 1,
+    installment_total: 1,
+    group_id: null,
+    notes: null,
     ...patch,
   });
 
@@ -580,16 +1090,19 @@ describe("painel executivo", () => {
   });
 
   it("composição separa à vista (dinheiro, Pix, débito, boleto único) e boleto parcelado, somando o total", () => {
-    const c = receiptComposition([
-      row({ payment_method: "dinheiro", net_amount: 50, gross_amount: 50 }),
-      row({ payment_method: "pix", net_amount: 150, gross_amount: 150 }),
-      row({ payment_method: "boleto", installment_total: 1, net_amount: 100, gross_amount: 100 }),
-      row({ payment_method: "boleto", installment_total: 3, net_amount: 200, gross_amount: 200 }),
-      row({ payment_method: "credito", gross_amount: 520, fee_amount: 20, net_amount: 500 }),
-      row({ payment_method: "pix", status: "pendente", paid_date: null, net_amount: 999 }),
-      row({ payment_method: "pix", paid_date: "2026-10-30", net_amount: 999 }),
-      row({ kind: "saida", payment_method: "pix", net_amount: 999, gross_amount: 999 }),
-    ], "2026-11");
+    const c = receiptComposition(
+      [
+        row({ payment_method: "dinheiro", net_amount: 50, gross_amount: 50 }),
+        row({ payment_method: "pix", net_amount: 150, gross_amount: 150 }),
+        row({ payment_method: "boleto", installment_total: 1, net_amount: 100, gross_amount: 100 }),
+        row({ payment_method: "boleto", installment_total: 3, net_amount: 200, gross_amount: 200 }),
+        row({ payment_method: "credito", gross_amount: 520, fee_amount: 20, net_amount: 500 }),
+        row({ payment_method: "pix", status: "pendente", paid_date: null, net_amount: 999 }),
+        row({ payment_method: "pix", paid_date: "2026-10-30", net_amount: 999 }),
+        row({ kind: "saida", payment_method: "pix", net_amount: 999, gross_amount: 999 }),
+      ],
+      "2026-11",
+    );
     expect(c.total).toBe(1000);
     expect(c.upfront).toBe(300);
     expect(c.upfrontPct).toBe(30);
@@ -607,26 +1120,67 @@ describe("painel executivo", () => {
   });
 
   it("recebíveis futuros começam no mês escolhido e excluem atrasados e pagos", () => {
-    const f = futureReceivables([
-      row({ status: "pendente", paid_date: null, due_date: "2026-11-03", net_amount: 70 }), // atrasado
-      row({ status: "pendente", paid_date: null, due_date: "2026-11-20", net_amount: 100 }),
-      row({ status: "pendente", paid_date: null, due_date: "2026-12-05", net_amount: 200 }),
-      row({ status: "pendente", paid_date: null, due_date: "2027-06-05", net_amount: 300 }),
-      row({ status: "pago", due_date: "2026-12-05", net_amount: 999 }),
-      row({ kind: "saida", status: "pendente", paid_date: null, due_date: "2026-12-05", gross_amount: 999, net_amount: 999 }),
-    ], "2026-11", "2026-11-06", 3);
+    const f = futureReceivables(
+      [
+        row({ status: "pendente", paid_date: null, due_date: "2026-11-03", net_amount: 70 }), // atrasado
+        row({ status: "pendente", paid_date: null, due_date: "2026-11-20", net_amount: 100 }),
+        row({ status: "pendente", paid_date: null, due_date: "2026-12-05", net_amount: 200 }),
+        row({ status: "pendente", paid_date: null, due_date: "2027-06-05", net_amount: 300 }),
+        row({ status: "pago", due_date: "2026-12-05", net_amount: 999 }),
+        row({
+          kind: "saida",
+          status: "pendente",
+          paid_date: null,
+          due_date: "2026-12-05",
+          gross_amount: 999,
+          net_amount: 999,
+        }),
+      ],
+      "2026-11",
+      "2026-11-06",
+      3,
+    );
     expect(f.months.map((m) => m.amount)).toEqual([100, 200, 0, 0]);
     expect(f.later).toBe(300);
     expect(f.total).toBe(600);
   });
 
   it("alertas mostram só situações existentes, com valor e quantidade", () => {
-    const alerts = dashboardAlerts([
-      row({ kind: "saida", status: "pendente", paid_date: null, due_date: "2026-11-01", gross_amount: 80, net_amount: 80 }),
-      row({ kind: "saida", status: "pendente", paid_date: null, due_date: "2026-11-10", gross_amount: 40, net_amount: 40 }),
-      row({ payment_method: "boleto", status: "pendente", paid_date: null, due_date: "2026-11-02", net_amount: 120 }),
-      row({ payment_method: "credito", status: "pendente", paid_date: null, due_date: "2026-11-02", net_amount: 90 }),
-    ], "2026-11-06");
+    const alerts = dashboardAlerts(
+      [
+        row({
+          kind: "saida",
+          status: "pendente",
+          paid_date: null,
+          due_date: "2026-11-01",
+          gross_amount: 80,
+          net_amount: 80,
+        }),
+        row({
+          kind: "saida",
+          status: "pendente",
+          paid_date: null,
+          due_date: "2026-11-10",
+          gross_amount: 40,
+          net_amount: 40,
+        }),
+        row({
+          payment_method: "boleto",
+          status: "pendente",
+          paid_date: null,
+          due_date: "2026-11-02",
+          net_amount: 120,
+        }),
+        row({
+          payment_method: "credito",
+          status: "pendente",
+          paid_date: null,
+          due_date: "2026-11-02",
+          net_amount: 90,
+        }),
+      ],
+      "2026-11-06",
+    );
     expect(alerts.map((a) => [a.id, a.amount, a.count])).toEqual([
       ["overdue_bills", 80, 1],
       ["defaulted", 120, 1],
@@ -634,5 +1188,40 @@ describe("painel executivo", () => {
       ["bills_week", 40, 1],
     ]);
     expect(dashboardAlerts([row()], "2026-11-06")).toEqual([]);
+  });
+});
+
+describe("despesas recorrentes no plano de lançamento", () => {
+  const input = {
+    kind: "saida" as const,
+    description: "Aluguel",
+    payment_method: "pix" as const,
+    amount: 2000,
+    date: "2026-01-31",
+    first_due_date: "2026-01-31",
+    installments: 1,
+    paid: true,
+    repeat_months: 3,
+  };
+  it("mantém o valor integral e competência de cada mês, sem baixar meses futuros", () => {
+    const plan = buildLaunchPlan(input, settings, () => "grupo");
+    expect(plan.rows.map((r) => r.gross_amount)).toEqual([2000, 2000, 2000]);
+    expect(plan.rows.map((r) => r.competence_date)).toEqual([
+      "2026-01-31",
+      "2026-02-28",
+      "2026-03-31",
+    ]);
+    expect(plan.rows.map((r) => r.status)).toEqual(["pago", "pendente", "pendente"]);
+  });
+  it("rejeita recorrência misturada com parcelas ou receita", () => {
+    expect(() => buildLaunchPlan({ ...input, installments: 2 }, settings, () => "grupo")).toThrow(
+      "Recorrência",
+    );
+    expect(() => buildLaunchPlan({ ...input, kind: "entrada" }, settings, () => "grupo")).toThrow(
+      "Recorrência",
+    );
+    expect(() => buildLaunchPlan({ ...input, repeat_months: 25 }, settings, () => "grupo")).toThrow(
+      "24 meses",
+    );
   });
 });

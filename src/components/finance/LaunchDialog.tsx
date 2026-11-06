@@ -1,5 +1,6 @@
 import {
   useMemo,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -97,6 +98,8 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
   const [entryDue, setEntryDue] = useState(todayISO());
   const [entryPaid, setEntryPaid] = useState(true);
   const [paid, setPaid] = useState(true);
+  const savingRef = useRef(false);
+  const [repeatMonths, setRepeatMonths] = useState(1);
   const [notes, setNotes] = useState("");
 
   const isCard = method === "debito" || method === "credito";
@@ -121,6 +124,7 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
             date,
             first_due_date: firstDue,
             installments,
+            repeat_months: kind === "saida" ? repeatMonths : 1,
             paid: paid && canSettle && (!withEntry || firstDue <= todayISO()),
             notes,
             ...(withEntry
@@ -159,6 +163,7 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
     date,
     firstDue,
     installments,
+    repeatMonths,
     paid,
     notes,
     canSettle,
@@ -180,16 +185,20 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (savingRef.current) return;
     if (!rows.length) {
       toast.error(plan.error || "Informe um valor maior que zero");
       return;
     }
+    savingRef.current = true;
     try {
       await create.mutateAsync(rows);
       toast.success(rows.length > 1 ? `${rows.length} lançamentos criados` : "Lançamento criado");
       onDone();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao salvar");
+    } finally {
+      savingRef.current = false;
     }
   }
 
@@ -204,6 +213,7 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
               setKind(k);
               setCategoryId("");
               setHasEntry(false);
+              setRepeatMonths(1);
               setPaid(true);
             }}
             className={cn(
@@ -261,7 +271,11 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
         )}
         <div className="grid gap-1.5">
           <Label htmlFor="amount">
-            {kind === "entrada" ? "Valor total da venda (R$)" : "Valor total (R$)"}
+            {kind === "entrada"
+              ? "Valor total da venda (R$)"
+              : repeatMonths > 1
+                ? "Valor mensal (R$)"
+                : "Valor total (R$)"}
           </Label>
           <Input
             id="amount"
@@ -376,6 +390,7 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
             onChange={(e) => {
               setMethod(e.target.value as PaymentMethod);
               setInstallments(1);
+              setRepeatMonths(1);
             }}
           >
             {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((m) => (
@@ -385,7 +400,31 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
             ))}
           </NativeSelect>
         </div>
-        {method !== "debito" && (
+        {kind === "saida" && (
+          <div className="grid gap-1.5 sm:col-span-2">
+            <Label htmlFor="repeat-months">Despesa recorrente</Label>
+            <NativeSelect
+              id="repeat-months"
+              value={repeatMonths}
+              onChange={(e) => {
+                setRepeatMonths(Number(e.target.value));
+                setInstallments(1);
+              }}
+            >
+              <option value={1}>Somente neste mês</option>
+              {Array.from({ length: 23 }, (_, i) => i + 2).map((n) => (
+                <option key={n} value={n}>
+                  {n} meses · valor integral a cada mês
+                </option>
+              ))}
+            </NativeSelect>
+            <p className="text-xs text-muted-foreground">
+              Ex.: aluguel de R$ 2.000 por mês. Cada mês terá sua própria competência e vencimento.
+              Para dividir uma compra, use parcelas.
+            </p>
+          </div>
+        )}
+        {method !== "debito" && repeatMonths === 1 && (
           <div className="grid gap-1.5">
             <Label htmlFor="inst">
               {withEntry
@@ -460,6 +499,12 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
       )}
       {rows.length > 0 && (
         <div className="rounded-lg border border-border bg-muted/60 p-4 text-sm">
+          {kind === "saida" && repeatMonths > 1 && (
+            <p className="mb-3 font-medium">
+              {repeatMonths} despesas mensais de {formatBRL(value)} · total programado{" "}
+              {formatBRL(totalNet)}. Somente o primeiro mês pode ser marcado como pago.
+            </p>
+          )}
           {withEntry && (
             <p className="mb-3 font-medium">
               Entrada {formatBRL(plan.entryAmount)} + saldo {formatBRL(plan.remaining)} = total da
