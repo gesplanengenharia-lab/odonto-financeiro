@@ -18,30 +18,47 @@ import {
   Settings,
   LogOut,
   Menu,
+  Plus,
   X,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { canUse, firstAllowedPath } from "@/lib/access";
 import { myAccessQuery } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
+import { LaunchDialog } from "@/components/finance/LaunchDialog";
 import clinicLogo from "@/assets/essencial-logo.png";
 import { cn } from "@/lib/utils";
 
-const nav = [
-  { group: "Visão geral", to: "/painel", label: "Painel", icon: LayoutDashboard },
-  { group: "Equipe", to: "/colaboradores", label: "Colaboradores", icon: Users },
-  { group: "Gestão", to: "/simulacao", label: "Simulação", icon: Calculator },
-  { group: "Financeiro", to: "/lancamentos", label: "Lançamentos", icon: ArrowLeftRight },
-  { group: "Financeiro", to: "/contas", label: "Contas a pagar e receber", icon: CalendarClock },
-  { group: "Financeiro", to: "/tesouraria", label: "Tesouraria", icon: Landmark },
-  { group: "Financeiro", to: "/cartoes", label: "Cartões", icon: CreditCard },
-  { group: "Financeiro", to: "/boletos", label: "Boletos", icon: Receipt },
-  { group: "Gestão", to: "/provisao", label: "Provisão", icon: TrendingUp },
-  { group: "Financeiro", to: "/inadimplentes", label: "Inadimplentes", icon: AlertTriangle },
-  { group: "Gestão", to: "/relatorios", label: "Relatórios", icon: BarChart3 },
-  { group: "Gestão", to: "/assistente", label: "Assistente financeiro", icon: MessageCircle },
-  { group: "Administração", to: "/analytics", label: "Analytics de uso", icon: Activity },
-  { group: "Administração", to: "/configuracoes", label: "Configurações", icon: Settings },
+const NAV_GROUPS = [
+  { label: "Visão geral", items: [{ to: "/painel", label: "Painel", icon: LayoutDashboard }] },
+  {
+    label: "Operação financeira",
+    items: [
+      { to: "/lancamentos", label: "Lançamentos", icon: ArrowLeftRight },
+      { to: "/contas", label: "Contas a pagar e receber", icon: CalendarClock },
+      { to: "/cartoes", label: "Cartões", icon: CreditCard },
+      { to: "/boletos", label: "Boletos", icon: Receipt },
+      { to: "/inadimplentes", label: "Inadimplentes", icon: AlertTriangle },
+      { to: "/tesouraria", label: "Tesouraria e bancos", icon: Landmark },
+    ],
+  },
+  { label: "Equipe", items: [{ to: "/colaboradores", label: "Colaboradores e dentistas", icon: Users }] },
+  {
+    label: "Gestão",
+    items: [
+      { to: "/relatorios", label: "Relatórios e DRE", icon: BarChart3 },
+      { to: "/provisao", label: "Provisão de meses", icon: TrendingUp },
+      { to: "/simulacao", label: "Simulação de caixa", icon: Calculator },
+      { to: "/assistente", label: "Assistente financeiro", icon: MessageCircle },
+    ],
+  },
+  {
+    label: "Administração",
+    items: [
+      { to: "/configuracoes", label: "Configurações e equipe", icon: Settings },
+      { to: "/analytics", label: "Uso do sistema", icon: Activity },
+    ],
+  },
 ] as const;
 
 export function AppShell() {
@@ -94,51 +111,91 @@ export function AppShell() {
     );
   }
 
+  const initials = (access.name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("");
   const sidebar = (
-    <nav className="flex h-full flex-col bg-sidebar px-3 py-5 text-sidebar-foreground">
-      <div className="mb-6 flex items-center gap-2 px-3 font-display text-base font-semibold text-sidebar-accent-foreground">
-        <img src={clinicLogo} alt="Essencial Odontologia" className="w-full max-w-[210px] rounded-lg bg-[#976f67] p-3" />
+    <nav aria-label="Menu principal" className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+      <div className="px-6 pb-5 pt-7">
+        <Link to="/painel" onClick={() => setOpen(false)} aria-label="Essencial Odontologia — ir para o painel">
+          <img src={clinicLogo} alt="Essencial Odontologia" className="h-auto w-[150px]" />
+        </Link>
+        <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-sidebar-primary">Gestão financeira</p>
       </div>
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-1">
-        {["Visão geral", "Financeiro", "Equipe", "Gestão", "Administração"].map((group) => {
-          const items = nav.filter((item) => item.group === group && canUse(access, item.to.slice(1)));
+      <div className="px-4 pb-4">
+        <LaunchDialog
+          trigger={
+            <Button className="w-full justify-center gap-2 bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90">
+              <Plus className="h-4 w-4" /> Novo lançamento
+            </Button>
+          }
+        />
+      </div>
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-3 pb-4">
+        {NAV_GROUPS.map((group) => {
+          const items = group.items.filter((item) => canUse(access, item.to.slice(1)));
           if (!items.length) return null;
-          return <section key={group} aria-label={group}>
-            <h2 className="mb-2 px-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/65">{group}</h2>
-            <ul className="space-y-1">{items.map((item) => <li key={item.to}>
-              <Link to={item.to} onClick={() => setOpen(false)}
-                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                activeProps={{ className: "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm" }}>
-                <item.icon className="h-4 w-4 shrink-0" />{item.label}
-              </Link>
-            </li>)}</ul>
-          </section>;
+          return (
+            <section key={group.label} aria-label={group.label}>
+              <h2 className="mb-1.5 px-3 font-sans text-[10.5px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/55">
+                {group.label}
+              </h2>
+              <ul className="space-y-0.5">
+                {items.map((item) => (
+                  <li key={item.to}>
+                    <Link
+                      to={item.to}
+                      onClick={() => setOpen(false)}
+                      className="group relative flex items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
+                      activeProps={{ className: "bg-sidebar-accent text-sidebar-accent-foreground" }}
+                    >
+                      {({ isActive }: { isActive: boolean }) => (
+                        <>
+                          <span
+                            aria-hidden="true"
+                            className={cn("absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-sidebar-primary transition-opacity", isActive ? "opacity-100" : "opacity-0")}
+                          />
+                          <item.icon className={cn("h-4 w-4 shrink-0", isActive ? "text-sidebar-primary" : "text-sidebar-foreground/70")} />
+                          {item.label}
+                        </>
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          );
         })}
       </div>
-      <div className="mt-4 border-t border-sidebar-border px-3 pt-4">
-        <p className="truncate text-sm font-semibold text-sidebar-accent-foreground">{access?.name}</p>
-        <p className="text-xs capitalize text-sidebar-foreground/70">{access?.roles.includes("admin") ? "Administrador" : "Membro"}</p>
-        <button onClick={signOut} className="mt-3 flex items-center gap-2 text-sm text-sidebar-foreground/80 hover:text-sidebar-accent-foreground">
-          <LogOut className="h-4 w-4" /> Sair
-        </button>
+      <div className="flex items-center gap-3 border-t border-sidebar-border px-5 py-4">
+        <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-bold text-sidebar-accent-foreground">
+          {initials}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-sidebar-accent-foreground">{access.name}</p>
+          <p className="text-xs text-sidebar-foreground/70">{access.roles.includes("admin") ? "Administrador" : "Equipe financeira"}</p>
+        </div>
+        <Button variant="ghost" size="icon" onClick={signOut} aria-label="Sair" className="text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+          <LogOut className="h-4 w-4" />
+        </Button>
       </div>
     </nav>
   );
 
   return (
-    <div className="min-h-screen bg-background lg:grid lg:grid-cols-[260px_1fr]">
+    <div className="min-h-screen bg-background lg:grid lg:grid-cols-[264px_1fr]">
       <a href="#main-content" className="sr-only z-[60] rounded-lg bg-card p-3 text-primary focus:not-sr-only focus:fixed focus:left-4 focus:top-4">Ir para o conteúdo</a>
       <aside className="sticky top-0 hidden h-screen lg:block">{sidebar}</aside>
 
-      <div className="flex items-center justify-between border-b border-border bg-card px-4 py-3 lg:hidden">
-        <img src={clinicLogo} alt="Essencial Odontologia" className="h-14 w-auto rounded-md bg-[#976f67] p-2" />
-        <Button variant="ghost" size="icon" aria-label="Abrir menu" onClick={() => setOpen(true)}>
+      <div className="sticky top-0 z-40 flex items-center justify-between bg-sidebar px-4 py-2.5 lg:hidden">
+        <Link to="/painel" aria-label="Essencial Odontologia — ir para o painel">
+          <img src={clinicLogo} alt="Essencial Odontologia" className="h-10 w-auto" />
+        </Link>
+        <Button variant="ghost" size="icon" aria-label="Abrir menu" aria-expanded={open} onClick={() => setOpen(true)} className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
           <Menu />
         </Button>
       </div>
       <div className={cn("fixed inset-0 z-50 lg:hidden", open ? "block" : "hidden")}>
         <div className="absolute inset-0 bg-foreground/40" onClick={() => setOpen(false)} />
-        <div className="relative h-full w-72">
+        <div className="relative h-full w-[min(18rem,85vw)] shadow-2xl">
           <button aria-label="Fechar menu" className="absolute right-3 top-4 z-10 text-sidebar-foreground" onClick={() => setOpen(false)}>
             <X className="h-5 w-5" />
           </button>
@@ -146,7 +203,7 @@ export function AppShell() {
         </div>
       </div>
 
-      <main id="main-content" className="mx-auto w-full min-w-0 max-w-[1680px] px-4 py-6 sm:px-8 sm:py-8 lg:px-10">
+      <main id="main-content" className="mx-auto w-full min-w-0 max-w-[1440px] px-4 py-6 sm:px-8 sm:py-8 lg:px-10">
         {canUse(access, location.pathname.split("/").filter(Boolean)[0] ?? "painel") ? <Outlet /> : <div className="surface-card p-6"><h1 className="text-xl font-semibold">Acesso restrito</h1><p className="mt-2 text-sm text-muted-foreground">{!access.permissionsReady ? "As permissões individuais ainda precisam ser ativadas pelo administrador." : "Peça ao administrador para liberar os módulos necessários ao seu trabalho."}</p>{firstAllowedPath(access) && <Button className="mt-4" onClick={() => navigate({ to: firstAllowedPath(access)! })}>Abrir módulo autorizado</Button>}<Button className="ml-2 mt-4" variant="outline" onClick={() => void refetch()}>Verificar acesso</Button></div>}
       </main>
     </div>

@@ -175,7 +175,8 @@ export async function addTreasuryMovement(input: NewMovement) {
   if (error) throw error;
 }
 export async function addBankReconciliation(input: NewReconciliation) {
-  const { error } = await treasuryDb.from("bank_reconciliations").insert(input);
+  // expected_balance is always recalculated by the database trigger; the placeholder only satisfies the column type.
+  const { error } = await treasuryDb.from("bank_reconciliations").insert({ ...input, expected_balance: 0 });
   if (error) throw error;
 }
 

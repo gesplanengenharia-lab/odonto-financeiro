@@ -129,7 +129,7 @@ function Tesouraria() {
                 <span className="text-xs text-muted-foreground">{account.active ? "Ativa" : "Inativa"}</span></div>
               <h2 className="mt-3 font-semibold">{account.name}</h2>
               <p className="text-xs text-muted-foreground">{account.kind === "caixa" ? "Caixa físico" : "Conta bancária"} · Abertura {account.opening_date.split("-").reverse().join("/")}</p>
-              <p className="mt-4 font-display text-2xl font-semibold tabular-nums">
+              <p className="mt-4 text-2xl font-bold tabular-nums">
                 {!validAsOf ? "Data inválida" : account.opening_date > asOf ? "Ainda não aberta" : balances.isError ? "Indisponível" : balances.data?.posted[account.id] === undefined ? "Calculando…" : formatBRL(balances.data?.posted[account.id] ?? 0)}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">Saldo com baixas conciliadas: {!validAsOf ? "—" : account.opening_date > asOf ? "—" : balances.isError ? "Indisponível" : balances.data?.confirmed[account.id] === undefined ? "Calculando…" : formatBRL(balances.data?.confirmed[account.id] ?? 0)}</p>

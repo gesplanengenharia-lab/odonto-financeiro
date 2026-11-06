@@ -1,65 +1,58 @@
 import { useFinancialMonth } from "@/hooks/use-financial-month";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { useMemo, useRef, useState } from "react";
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Calculator, RefreshCw } from "lucide-react";
 import { pageHead } from "@/lib/head";
 import {
   addMonths,
+  cashMargin,
+  cashPixMonth,
   cashValue,
+  dashboardAlerts,
+  dashboardCosts,
   dashboardDay,
   dashboardIndicators,
-  dashboardCosts,
   dashboardMonth,
+  defaultedReceivables,
   formatBRL,
   formatDate,
   formatMonth,
   formatPct,
-  isDefaulted,
+  futureReceivables,
+  monthBilling,
   monthKey,
   monthRange,
   nextMonths,
   PAYMENT_LABELS,
+  receiptComposition,
   summarize,
   todayISO,
   addDays,
-  monthBilling,
-  cashPixMonth,
 } from "@/lib/finance";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BillingTab, CashPixTab } from "@/components/finance/PainelTabs";
+import { AlertsPanel, CompositionPanel, CostsPanel, DefaultPanel, FuturePanel, KpiStrip } from "@/components/finance/PainelResumo";
 import { categoriesQuery, txnsByCompetenceQuery, txnsByDueQuery } from "@/lib/queries";
 import { LaunchDialog } from "@/components/finance/LaunchDialog";
-import {
-  EmptyState,
-  KindBadge,
-  MonthPicker,
-  Money,
-  PageHeader,
-  StatCard,
-} from "@/components/finance/ui";
+import { EmptyState, KindBadge, MonthPicker, Money, Pct, PeriodTag, StatCard } from "@/components/finance/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_authenticated/painel")({
-  head: () => pageHead("Painel", "Resumo financeiro do mês da clínica."),
+  head: () => pageHead("Painel financeiro", "Faturamento, recebimentos, despesas, resultado e alertas do mês da clínica."),
   component: Painel,
 });
 
 function Painel() {
   const today = todayISO();
+  const currentMonth = monthKey(today);
   const [month, setMonth] = useFinancialMonth();
-  const [tab, setTab] = useState("resumo");
+  const [tab, setTab] = useState("faturamento");
+  const detailsRef = useRef<HTMLElement>(null);
   const [selectedDay, setSelectedDay] = useState(today);
   const day = monthKey(selectedDay) === month ? selectedDay : `${month}-01`;
   const { start, end } = monthRange(month);
@@ -70,23 +63,24 @@ function Painel() {
   const historyQuery = useQuery(txnsByCompetenceQuery(historyStart, end));
   const categoryQuery = useQuery(categoriesQuery());
   const cash = useMemo(() => cashQuery.data ?? [], [cashQuery.data]);
-  const comp = compQuery.data ?? [];
+  const comp = useMemo(() => compQuery.data ?? [], [compQuery.data]);
   const m = useMemo(() => dashboardMonth(cash, month, today), [cash, month, today]);
   const daily = useMemo(() => dashboardDay(cash, day), [cash, day]);
   const s = summarize(comp);
   const pending = cash.filter((t) => t.status === "pendente");
-  const defaulted = pending.filter((t) => isDefaulted(t, today));
-  const defaultedTotal = summarize(defaulted).grossRevenue;
-  const upcoming = pending
-    .filter((t) => t.due_date >= today && t.due_date <= addDays(today, 7))
-    .slice(0, 8);
+  const upcoming = pending.filter((t) => t.due_date >= today && t.due_date <= addDays(today, 7)).slice(0, 8);
   const indicators = dashboardIndicators(cash, comp, month, today);
   const costs = dashboardCosts(comp, categoryQuery.data ?? []);
-  const pct = (value: number | null) => (value === null ? "—" : formatPct(value));
+  const pct = (value: number | null) => (value === null ? "sem base" : formatPct(value));
   const billing = monthBilling(comp, month);
+  const composition = useMemo(() => receiptComposition(cash, month), [cash, month]);
+  const future = useMemo(() => futureReceivables(cash, month, today, 3), [cash, month, today]);
+  const alerts = useMemo(() => dashboardAlerts(cash, today), [cash, today]);
+  const defaulted = useMemo(() => defaultedReceivables(cash, month, false, today), [cash, month, today]);
   const liquid = useMemo(() => cashPixMonth(cash, month, today), [cash, month, today]);
+  const margin = cashMargin(m.realized, m.received);
   const historyMonths = nextMonths(monthKey(historyStart), 6);
-  const history = nextMonths(monthKey(addMonths(start, -5)), 6).map((k) => {
+  const history = historyMonths.map((k) => {
     const row = dashboardMonth(cash, k, today);
     return { mes: formatMonth(k), Recebido: row.received, Pago: row.paid };
   });
@@ -95,253 +89,133 @@ function Painel() {
     { label: "(−) Taxas de cartão", cash: -m.cashDre.cardFees, comp: -s.cardFees },
     { label: "(=) Receita líquida", cash: m.cashDre.netRevenue, comp: s.netRevenue, strong: true },
     { label: "(−) Despesas fixas", cash: -m.cashDre.fixedExpenses, comp: -s.fixedExpenses },
-    {
-      label: "(−) Despesas variáveis / sem natureza",
-      cash: -m.cashDre.variableExpenses,
-      comp: -s.variableExpenses,
-    },
+    { label: "(−) Despesas variáveis / sem natureza", cash: -m.cashDre.variableExpenses, comp: -s.variableExpenses },
     { label: "(=) Resultado gerencial", cash: m.cashDre.profit, comp: s.profit, strong: true },
   ];
+  const periodNote =
+    month === currentMonth ? "Mês atual · valores realizados até hoje" : month < currentMonth ? "Mês encerrado" : "Mês futuro · apenas previsões";
+  const openTab = (value: string) => {
+    setTab(value);
+    detailsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
-    <div>
-      <PageHeader
-        title="Painel"
-        subtitle="O essencial do mês, com detalhes nas abas"
-        actions={
-          <>
-            <MonthPicker value={month} onChange={setMonth} />
-            <Button asChild variant="outline">
-              <Link to="/simulacao">Simulação</Link>
+    <div className="space-y-6">
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Visão geral</p>
+          <h1 className="mt-1 text-[1.9rem] leading-tight sm:text-[2.25rem]">Painel financeiro</h1>
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            {formatMonth(month, true)}
+            <PeriodTag>{periodNote}</PeriodTag>
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <MonthPicker value={month} onChange={setMonth} />
+          {month !== currentMonth && (
+            <Button variant="ghost" size="sm" onClick={() => setMonth(currentMonth)}>
+              Ir para o mês atual
             </Button>
-            <LaunchDialog />
-          </>
-        }
-      />
+          )}
+          <LaunchDialog />
+        </div>
+      </header>
+
       {cashQuery.isPending || compQuery.isPending ? (
-        <div className="surface-card p-8 text-sm text-muted-foreground" role="status">
-          Carregando o financeiro de {formatMonth(month, true)}…
+        <div className="space-y-6" role="status" aria-label={`Carregando o financeiro de ${formatMonth(month, true)}`}>
+          <Skeleton className="h-44 w-full rounded-2xl" />
+          <div className="grid gap-6 lg:grid-cols-3">
+            <Skeleton className="h-72 rounded-2xl lg:col-span-2" />
+            <Skeleton className="h-72 rounded-2xl" />
+          </div>
+          <span className="sr-only">Carregando…</span>
         </div>
       ) : cashQuery.isError || compQuery.isError ? (
         <div className="surface-card p-6" role="alert">
           <p className="font-semibold text-expense">Não foi possível carregar o painel.</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Confira a conexão e tente novamente para visualizar os valores.
+            Nenhum valor foi exibido para não mostrar saldos incorretos. Confira a conexão e tente novamente.
           </p>
           <Button
-            className="mt-3"
+            className="mt-3 gap-2"
             variant="outline"
             onClick={() => {
               void cashQuery.refetch();
               void compQuery.refetch();
             }}
           >
-            Tentar novamente
+            <RefreshCw className="h-4 w-4" /> Tentar novamente
           </Button>
         </div>
       ) : (
-        <Tabs value={tab} onValueChange={setTab}>
-          <div className="overflow-x-auto pb-1">
-            <TabsList
-              aria-label="Detalhes do painel"
-              className="h-auto w-max min-w-full justify-start"
-            >
-              <TabsTrigger value="resumo">Resumo</TabsTrigger>
-              <TabsTrigger value="faturamento">Faturamento</TabsTrigger>
-              <TabsTrigger value="recebimentos">Recebimentos</TabsTrigger>
-              <TabsTrigger value="caixa">Entradas à vista</TabsTrigger>
-              <TabsTrigger value="dre">DRE e custos</TabsTrigger>
-              <TabsTrigger value="diario">Fechamento diário</TabsTrigger>
-            </TabsList>
-          </div>
+        <>
+          <KpiStrip month={month} billing={billing} cash={m} composition={composition} margin={margin} />
+
           {m.missingPaidDates > 0 && (
-            <p className="mt-2 text-xs text-warning">
-              {m.missingPaidDates} lançamento(s) pago(s) sem data de pagamento: o vencimento foi
-              usado como referência.
+            <p className="text-xs text-warning">
+              {m.missingPaidDates} lançamento(s) pago(s) neste mês sem data de pagamento: o vencimento foi usado como referência.
             </p>
           )}
-          <TabsContent value="resumo" className="space-y-4">
-            <section
-              className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
-              aria-label="Resumo financeiro do mês"
-            >
-              <StatCard
-                label="Faturamento do mês"
-                value={billing.total}
-                tone="primary"
-                hint="Vendas por competência, incluindo parcelas futuras"
-              />
-              <StatCard
-                label="Recebido no caixa"
-                value={m.received}
-                tone="income"
-                hint="Todas as formas, pela data do recebimento"
-              />
-              <StatCard
-                label="Despesas pagas"
-                value={m.paid}
-                tone="expense"
-                hint="Saídas pela data do pagamento"
-              />
-              <StatCard
-                label={m.cashDre.profit < 0 ? "Prejuízo do mês · caixa" : "Lucro do mês · caixa"}
-                value={m.cashDre.profit}
-                tone={m.cashDre.profit >= 0 ? "income" : "expense"}
-                hint={
-                  <>
-                    <strong>
-                      {m.cashDre.grossRevenue > 0 ? formatPct(m.cashDre.margin) : "—"}
-                    </strong>{" "}
-                    de margem · recebido menos pago
-                  </>
-                }
-              />
-            </section>
-            <section
-              className="surface-card overflow-hidden"
-              aria-labelledby="month-attention-title"
-            >
-              <div className="px-5 py-4 border-b border-border">
-                <h2 id="month-attention-title" className="font-semibold">
-                  Para acompanhar
-                </h2>
-              </div>
-              <dl className="divide-y divide-border">
-                <div className="flex items-center justify-between gap-4 px-5 py-3">
-                  <dt>
-                    <button
-                      type="button"
-                      className="text-sm font-medium text-primary hover:underline"
-                      onClick={() => setTab("caixa")}
-                    >
-                      Entradas à vista recebidas
-                    </button>
-                    <p className="text-xs text-muted-foreground">
-                      Dinheiro, Pix, débito e boleto à vista
-                    </p>
-                  </dt>
-                  <dd className="tabular font-semibold text-income">
-                    {formatBRL(liquid.received)}
-                  </dd>
-                </div>
-                <div className="flex items-center justify-between gap-4 px-5 py-3">
-                  <dt>
-                    <button
-                      type="button"
-                      className="text-sm font-medium text-primary hover:underline"
-                      onClick={() => setTab("recebimentos")}
-                    >
-                      Ainda deve entrar no mês
-                    </button>
-                    <p className="text-xs text-muted-foreground">
-                      A vencer, sem incluir os atrasados
-                    </p>
-                  </dt>
-                  <dd className="tabular font-semibold">{formatBRL(m.toReceive)}</dd>
-                </div>
-                <div className="flex items-center justify-between gap-4 px-5 py-3">
-                  <dt>
-                    <Link to="/contas" className="text-sm font-medium text-primary hover:underline">
-                      Contas em aberto do mês
-                    </Link>
-                    {m.priorToPay > 0 && (
-                      <p className="text-xs text-warning">
-                        Mais {formatBRL(m.priorToPay)} de meses anteriores
-                      </p>
-                    )}
-                  </dt>
-                  <dd className="tabular font-semibold text-expense">{formatBRL(m.toPay)}</dd>
-                </div>
-              </dl>
-            </section>
-            {defaultedTotal > 0 && (
-              <p className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm">
-                <Link to="/inadimplentes" className="font-medium text-warning hover:underline">
-                  {formatBRL(defaultedTotal)} em recebimentos atrasados
-                </Link>
-                <span className="text-muted-foreground">
-                  {" "}
-                  · {defaulted.length} parcela(s), considerando todos os meses.
-                </span>
-              </p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Faturamento e recebimento são visões diferentes. O resultado de caixa usa os
-              lançamentos pagos e não representa o saldo bancário.
-            </p>
-            <div className="surface-card p-5">
-              <h2 className="text-base font-semibold">Entradas e saídas realizadas — 6 meses</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Somente valores pagos, pela data efetiva de pagamento.
-              </p>
-              <div className="mt-4 h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={history} barGap={4}>
-                    <CartesianGrid vertical={false} stroke="var(--border)" />
-                    <XAxis
-                      dataKey="mes"
-                      tickLine={false}
-                      axisLine={false}
-                      fontSize={12}
-                      stroke="var(--muted-foreground)"
-                    />
-                    <YAxis
-                      tickLine={false}
-                      axisLine={false}
-                      fontSize={11}
-                      stroke="var(--muted-foreground)"
-                      tickFormatter={(v) => `${Math.round(v / 1000)}k`}
-                    />
-                    <Tooltip
-                      formatter={(v: number) => formatBRL(v)}
-                      contentStyle={{ borderRadius: 8, border: "1px solid var(--border)" }}
-                    />
-                    <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="Recebido" fill="var(--income)" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Pago" fill="var(--expense)" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </TabsContent>
-          <TabsContent value="faturamento">
-            <BillingTab
+
+          <div className="grid gap-6 lg:grid-cols-3">
+            <CompositionPanel month={month} data={composition} />
+            <AlertsPanel alerts={alerts} />
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            <FuturePanel month={month} currentMonth={currentMonth} data={future} />
+            <DefaultPanel month={month} data={defaulted} monthRate={indicators.defaultPct} monthBase={indicators.dueAmount} />
+            <CostsPanel
               month={month}
-              billing={billing}
-              history={historyMonths.map((k) => ({
-                month: k,
-                billing: monthBilling(historyQuery.data ?? [], k),
-              }))}
-              historyLoading={historyQuery.isPending}
-              historyError={historyQuery.isError}
-              onRetryHistory={() => {
-                void historyQuery.refetch();
-              }}
+              summary={s}
+              costs={costs}
+              categoriesState={categoryQuery.isPending ? "loading" : categoryQuery.isError ? "error" : "ready"}
+              onRetry={() => void categoryQuery.refetch()}
+              onOpenDre={() => openTab("dre")}
             />
-          </TabsContent>
-          <TabsContent value="recebimentos">
-            <section
-              className="grid gap-4 sm:grid-cols-2"
-              aria-label="Inadimplência dos recebimentos"
-            >
-              <StatCard
-                label="Inadimplência do mês"
-                value={indicators.defaultedAmount}
-                tone="warning"
-                hint={`${pct(indicators.defaultPct)} dos valores não-cartão com vencimento no mês até ontem`}
-              />
-              <StatCard
-                label="Inadimplência total atual"
-                value={defaultedTotal}
-                tone="warning"
-                hint={
-                  <Link to="/inadimplentes" className="text-primary hover:underline">
-                    {defaulted.length} parcela(s) vencida(s) em todos os meses
-                  </Link>
-                }
-              />
-            </section>
-            <section className="surface-card mt-4 overflow-hidden" aria-labelledby="methods-title">
+          </div>
+
+          <details className="group surface-card px-5 py-4 text-sm">
+            <summary className="cursor-pointer select-none font-medium text-foreground marker:text-primary">Como ler estes números</summary>
+            <ul className="mt-3 list-disc space-y-1.5 pl-5 text-muted-foreground">
+              <li><strong className="text-foreground">Faturamento (competência)</strong>: vendas atribuídas ao mês, inclusive parcelas que só serão recebidas depois.</li>
+              <li><strong className="text-foreground">Recebimentos (caixa)</strong>: o que foi considerado recebido no mês, pela data do recebimento. Inclui baixas automáticas por vencimento, que não comprovam o depósito no banco.</li>
+              <li><strong className="text-foreground">Resultado de caixa</strong>: recebimentos menos despesas pagas no mês. Não é o saldo bancário — o saldo das contas fica na Tesouraria.</li>
+              <li><strong className="text-foreground">Margem de caixa</strong>: resultado de caixa dividido pelos recebimentos do mês. Quando não há recebimentos, aparece “Sem base para cálculo”.</li>
+              <li>Aportes, transferências e financiamentos não são faturamento nem lucro operacional.</li>
+            </ul>
+          </details>
+
+          <section ref={detailsRef} aria-labelledby="details-title" className="scroll-mt-6 space-y-4">
+            <div>
+              <h2 id="details-title" className="text-xl">Aprofundar a análise</h2>
+              <p className="text-sm text-muted-foreground">Detalhes de {formatMonth(month, true)} por assunto.</p>
+            </div>
+            <Tabs value={tab} onValueChange={setTab}>
+              <div className="overflow-x-auto pb-1">
+                <TabsList aria-label="Análises detalhadas" className="h-auto w-max min-w-full justify-start">
+                  <TabsTrigger value="faturamento">Faturamento</TabsTrigger>
+                  <TabsTrigger value="formas">Recebimentos e agenda</TabsTrigger>
+                  <TabsTrigger value="contas">À vista × contas</TabsTrigger>
+                  <TabsTrigger value="dre">DRE e custos</TabsTrigger>
+                  <TabsTrigger value="diario">Fechamento diário</TabsTrigger>
+                  <TabsTrigger value="evolucao">Evolução 6 meses</TabsTrigger>
+                </TabsList>
+              </div>
+              <TabsContent value="faturamento">
+                <BillingTab
+                  month={month}
+                  billing={billing}
+                  history={historyMonths.map((k) => ({ month: k, billing: monthBilling(historyQuery.data ?? [], k) }))}
+                  historyLoading={historyQuery.isPending}
+                  historyError={historyQuery.isError}
+                  onRetryHistory={() => {
+                    void historyQuery.refetch();
+                  }}
+                />
+              </TabsContent>
+              <TabsContent value="formas" className="space-y-4">
+            <section className="surface-card overflow-hidden" aria-labelledby="methods-title">
               <div className="p-5 sm:p-6">
                 <h2 id="methods-title" className="text-base font-semibold">
                   Recebimentos por forma de pagamento · caixa
@@ -396,7 +270,6 @@ function Painel() {
                 atrasados; a projeção de fechamento não.
               </p>
             </section>
-
             <div className="surface-card p-5 mt-4">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-base font-semibold">Vencimentos dos próximos 7 dias</h2>
@@ -431,15 +304,26 @@ function Painel() {
                 </ul>
               )}
             </div>
-          </TabsContent>
-          <TabsContent value="caixa">
-            <CashPixTab month={month} data={liquid} />
-          </TabsContent>
-          <TabsContent value="dre" className="space-y-4">
+              </TabsContent>
+              <TabsContent value="contas" className="space-y-4">
+                <div className="surface-card flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-base">Simulação de pagamento das contas</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Abaixo, o que entrou à vista em {formatMonth(month, true)} comparado às contas do mês. Para projetar com saldo inicial e aportes, use a simulação.
+                    </p>
+                  </div>
+                  <Button asChild variant="outline" className="shrink-0 gap-2">
+                    <Link to="/simulacao"><Calculator className="h-4 w-4" /> Abrir simulação de caixa</Link>
+                  </Button>
+                </div>
+                <CashPixTab month={month} data={liquid} />
+              </TabsContent>
+              <TabsContent value="dre" className="space-y-4">
             <section className="surface-card overflow-hidden" aria-labelledby="dre-title">
               <div className="p-5">
                 <h2 id="dre-title" className="text-base font-semibold">
-                  DRE gerencial do mês
+                  DRE gerencial do mês — caixa × competência
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Caixa: o que foi recebido e pago. Competência: receitas e despesas atribuídas ao
@@ -470,13 +354,13 @@ function Painel() {
                     ))}
                     <tr className="border-t border-border">
                       <th scope="row" className="px-5 py-3 text-left font-medium">
-                        Margem sobre receita bruta
+                        Margem (resultado ÷ receita)
                       </th>
                       <td className="tabular px-5 py-3 text-right">
-                        {m.cashDre.grossRevenue ? formatPct(m.cashDre.margin) : "—"}
+                        <Pct value={cashMargin(m.cashDre.profit, m.cashDre.netRevenue)} />
                       </td>
                       <td className="tabular px-5 py-3 text-right">
-                        {s.grossRevenue ? formatPct(s.margin) : "—"}
+                        <Pct value={s.grossRevenue > 0 ? s.margin : null} />
                       </td>
                     </tr>
                   </tbody>
@@ -488,10 +372,10 @@ function Painel() {
                 entra nesta DRE.
               </p>
             </section>
-            <section className="surface-card mt-4 p-5 sm:p-6" aria-labelledby="costs-title">
+            <section className="surface-card mt-4 p-5 sm:p-6" aria-labelledby="costs-detail-title">
               <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-                <h2 id="costs-title" className="text-base font-semibold">
-                  Onde estão os custos do mês
+                <h2 id="costs-detail-title" className="text-base font-semibold">
+                  Custos do mês por categoria
                 </h2>
                 <span className="tabular font-semibold">{formatBRL(s.totalExpenses)}</span>
               </div>
@@ -558,9 +442,9 @@ function Painel() {
                 </div>
               )}
             </section>
-          </TabsContent>
-          <TabsContent value="diario">
-            <section className="surface-card mt-4 overflow-hidden" aria-labelledby="daily-title">
+              </TabsContent>
+              <TabsContent value="diario">
+            <section className="surface-card overflow-hidden" aria-labelledby="daily-title">
               <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <h2 id="daily-title" className="text-base font-semibold">
@@ -661,10 +545,47 @@ function Painel() {
                 )}
               </div>
             </section>
-          </TabsContent>
-        </Tabs>
+              </TabsContent>
+              <TabsContent value="evolucao">
+            <div className="surface-card p-5">
+              <h2 className="text-base font-semibold">Entradas e saídas realizadas — 6 meses</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Somente valores pagos, pela data efetiva de pagamento.
+              </p>
+              <div className="mt-4 h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={history} barGap={4}>
+                    <CartesianGrid vertical={false} stroke="var(--border)" />
+                    <XAxis
+                      dataKey="mes"
+                      tickLine={false}
+                      axisLine={false}
+                      fontSize={12}
+                      stroke="var(--muted-foreground)"
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      fontSize={11}
+                      stroke="var(--muted-foreground)"
+                      tickFormatter={(v) => `${Math.round(v / 1000)}k`}
+                    />
+                    <Tooltip
+                      formatter={(v: number) => formatBRL(v)}
+                      contentStyle={{ borderRadius: 8, border: "1px solid var(--border)" }}
+                    />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="Recebido" fill="var(--income)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Pago" fill="var(--expense)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+              </TabsContent>
+            </Tabs>
+          </section>
+        </>
       )}
     </div>
   );
 }
-
