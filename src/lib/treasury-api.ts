@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import type { TreasuryKind } from "./treasury";
 import { assertCanLinkPaidTransaction, assertCanReconcilePaidTransaction } from "./treasury-linking";
-import { todayISO } from "./finance";
+import { treasuryTodayISO } from "./treasury-time";
 
 type Table<Row, Insert, Update = Partial<Insert>> = {
   Row: Row; Insert: Insert; Update: Update; Relationships: [];
@@ -177,7 +177,7 @@ export async function linkPaidFinancialTransaction(input: {
   account: FinancialAccount;
 }) {
   const { transaction, account } = input;
-  assertCanLinkPaidTransaction(transaction, account, todayISO());
+  assertCanLinkPaidTransaction(transaction, account, treasuryTodayISO());
   const { data, error } = await treasuryDb.from("transactions")
     .update({ financial_account_id: account.id })
     .eq("id", transaction.id).eq("status", "pago")
@@ -193,7 +193,7 @@ export async function linkPaidFinancialTransaction(input: {
 }
 /** Confirma uma transação já paga e vinculada após conferência humana do extrato. */
 export async function confirmPaidFinancialTransaction(transaction: PaidFinancialTransaction) {
-  assertCanReconcilePaidTransaction(transaction, todayISO());
+  assertCanReconcilePaidTransaction(transaction, treasuryTodayISO());
   const { data: identity, error: identityError } = await treasuryDb.auth.getUser();
   if (identityError) throw identityError;
   if (!identity.user) throw new Error("Sessão expirada. Entre novamente.");
