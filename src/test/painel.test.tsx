@@ -123,6 +123,43 @@ describe("Painel e simulação", () => {
     expect(kpis.getByText("sem base para cálculo")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Precisa de atenção" })).toBeInTheDocument();
   });
+  it("mostra crescimento nos detalhes sem acrescentar cartões na tela inicial", () => {
+    render(<Panel />);
+    expect(screen.getByLabelText("Indicadores principais do mês").children).toHaveLength(4);
+    expect(screen.getByLabelText("Período da comparação")).toHaveTextContent(
+      "01/11/2026 a 04/11/2026 contra 01/10/2026 a 04/10/2026",
+    );
+    expect(
+      screen.queryByRole("table", { name: "Evolução financeira dos últimos seis meses" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Ver análises e fechamento diário"));
+    expect(
+      screen.getByRole("table", { name: "Evolução financeira dos últimos seis meses" }),
+    ).toBeInTheDocument();
+  });
+  it("abre previsão de 90 dias, exige saldo válido e permite cenário sem alterar lançamentos", () => {
+    render(<Panel />);
+    fireEvent.click(screen.getByText("Ver análises e fechamento diário"));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Caixa 90 dias" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    const region = within(
+      screen.getByRole("region", { name: "Vai faltar dinheiro nos próximos 90 dias?" }),
+    );
+    expect(region.getAllByText("Informe o saldo").length).toBeGreaterThan(0);
+    fireEvent.change(region.getByLabelText("Saldo disponível agora (R$)"), {
+      target: { value: "100,00" },
+    });
+    expect(region.getByText("Primeira falta em 10/11/2026")).toBeInTheDocument();
+    const original = JSON.stringify(state.rows);
+    fireEvent.change(region.getByLabelText("Cenário de recebimentos"), { target: { value: "30" } });
+    expect(JSON.stringify(state.rows)).toBe(original);
+    fireEvent.change(region.getByLabelText("Saldo disponível agora (R$)"), {
+      target: { value: "abc" },
+    });
+    expect(region.getByRole("alert")).toHaveTextContent("Informe um valor");
+  });
   it("não calcula aporte quando a consulta da simulação falha", () => {
     state.error = true;
     render(<Simulation />);

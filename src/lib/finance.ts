@@ -1,5 +1,197 @@
 // Pure finance rules for the clinic. No I/O here so it can be tested.
 
+/** Compare equivalent calendar periods; never compare a partial month to a full one. */
+export function managementComparison(txns: Txn[], month: string, today = todayISO()) {
+  const current = monthRange(month);
+  const previousMonth = monthKey(addMonths(current.start, -1));
+  const previous = monthRange(previousMonth);
+  const future = month > monthKey(today);
+  const partial = month === monthKey(today);
+  const end = partial ? today : current.end;
+  const previousEnd = partial
+    ? `${previousMonth}-${String(Math.min(Number(today.slice(8)), Number(previous.end.slice(8)))).padStart(2, "0")}`
+    : previous.end;
+  const summarizePeriod = (start: string, until: string) => {
+    const inRange = (date: string) => date >= start && date <= until;
+    const sales = txns.filter((t) => t.kind === "entrada" && inRange(t.competence_date));
+    const paid = txns.filter((t) => t.status === "pago" && inRange(t.paid_date || t.due_date));
+    const revenue = round2(sales.reduce((s, t) => s + t.gross_amount, 0));
+    const received = round2(
+      paid.filter((t) => t.kind === "entrada").reduce((s, t) => s + t.net_amount, 0),
+    );
+    const expenses = round2(
+      paid.filter((t) => t.kind === "saida").reduce((s, t) => s + t.gross_amount, 0),
+    );
+    return {
+      sales: revenue,
+      received,
+      expenses,
+      result: round2(received - expenses),
+      margin: cashMargin(received - expenses, received),
+      recorded: txns.some((t) => inRange(t.competence_date)) || paid.length > 0,
+    };
+  };
+  const now = summarizePeriod(current.start, end);
+  const before = summarizePeriod(previous.start, previousEnd);
+  const change = (value: number, base: number) => ({
+    delta: !future && before.recorded ? round2(value - base) : null,
+    percent: !future && base > 0 ? round2(((value - base) / base) * 100) : null,
+  });
+  return {
+    month,
+    previousMonth,
+    start: current.start,
+    end,
+    previousStart: previous.start,
+    previousEnd,
+    partial,
+    future,
+    now,
+    before,
+    sales: change(now.sales, before.sales),
+    received: change(now.received, before.received),
+    expenses: change(now.expenses, before.expenses),
+    result: change(now.result, before.result),
+    marginPoints:
+      !future && now.margin !== null && before.margin !== null
+        ? round2(now.margin - before.margin)
+        : null,
+  };
+}
+
+export function managementHistory(txns: Txn[], month: string, today = todayISO()) {
+  return nextMonths(monthKey(addMonths(`${month}-01`, -5)), 6).map((key) => {
+    const comparison = managementComparison(txns, key, today);
+    const available = !comparison.future && comparison.now.recorded;
+    return {
+      month: key,
+      partial: comparison.partial,
+      available,
+      sales: available ? comparison.now.sales : null,
+      received: available ? comparison.now.received : null,
+      paid: available ? comparison.now.expenses : null,
+      result: available ? comparison.now.result : null,
+      margin: available ? comparison.now.margin : null,
+    };
+  });
+}
+
+/** Only a valid, explicitly entered amount is an opening-balance assumption. */
+export function parseForecastOpening(text: string): number | null {
+  const value = text.trim();
+  if (!/^-?(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?$/.test(value)) return null;
+  const amount = Number(value.replace(/\./g, "").replace(",", "."));
+  return Number.isFinite(amount) && Math.abs(amount) <= 9999999999.99 ? amount : null;
+}
+
+/** Daily closing balances for exactly 90 days. Overdue bills enter on day one;
+ * overdue income is excluded. A delay scenario shifts pending income only.
+ * No paid item is counted again; no future sales, loans or fictional cash. */
+export function forecast90(txns: Txn[], start: string, opening: number | null, delayDays = 0) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || toISO(parseISO(start)) !== start)
+    throw new Error("Informe uma data inicial válida.");
+  if (!Number.isInteger(delayDays) || delayDays < 0 || delayDays > 90)
+    throw new Error("Confira os dias de atraso da simulação.");
+  if (opening !== null && (!Number.isFinite(opening) || Math.abs(opening) > 9999999999.99))
+    throw new Error("Informe um saldo inicial válido.");
+  const end = addDays(start, 89);
+  const cents = (value: number) => Math.round(value * 100);
+  const daily = Array.from({ length: 90 }, (_, i) => ({
+    date: addDays(start, i),
+    income: 0,
+    expenses: 0,
+  }));
+  const indexes = new Map(daily.map((day, i) => [day.date, i]));
+  let overdueBills = 0,
+    excludedOverdueIncome = 0,
+    shiftedBeyond = 0;
+  txns
+    .filter((t) => t.status === "pendente")
+    .forEach((t) => {
+      const amount = cents(t.kind === "entrada" ? t.net_amount : t.gross_amount);
+      let date = t.due_date;
+      if (t.kind === "entrada") {
+        if (date < start) {
+          excludedOverdueIncome += amount;
+          return;
+        }
+        date = addDays(date, delayDays);
+        if (t.due_date <= end && date > end) shiftedBeyond += amount;
+      } else if (date < start) {
+        overdueBills += amount;
+        date = start;
+      }
+      const i = indexes.get(date);
+      if (i === undefined) return;
+      if (t.kind === "entrada") daily[i]!.income += amount;
+      else daily[i]!.expenses += amount;
+    });
+  let balance = opening === null ? null : cents(opening);
+  let minimum = balance;
+  let minimumDate: string | null = balance !== null ? start : null;
+  let firstDeficit: string | null = balance !== null && balance < 0 ? start : null;
+  const days = daily.map((day) => {
+    if (balance !== null) {
+      balance += day.income - day.expenses;
+      if (minimum === null || balance < minimum) {
+        minimum = balance;
+        minimumDate = day.date;
+      }
+      if (balance < 0 && firstDeficit === null) firstDeficit = day.date;
+    }
+    return {
+      date: day.date,
+      income: day.income / 100,
+      expenses: day.expenses / 100,
+      balance: balance === null ? null : balance / 100,
+    };
+  });
+  const buckets = new Map<
+    string,
+    {
+      month: string;
+      start: string;
+      end: string;
+      income: number;
+      expenses: number;
+      balance: number | null;
+    }
+  >();
+  days.forEach((day) => {
+    const key = monthKey(day.date);
+    const bucket = buckets.get(key) ?? {
+      month: key,
+      start: day.date,
+      end: day.date,
+      income: 0,
+      expenses: 0,
+      balance: null,
+    };
+    bucket.end = day.date;
+    bucket.income = round2(bucket.income + day.income);
+    bucket.expenses = round2(bucket.expenses + day.expenses);
+    bucket.balance = day.balance;
+    buckets.set(key, bucket);
+  });
+  return {
+    start,
+    end,
+    days,
+    months: [...buckets.values()],
+    delayDays,
+    income: daily.reduce((s, day) => s + day.income, 0) / 100,
+    expenses: daily.reduce((s, day) => s + day.expenses, 0) / 100,
+    closing: balance === null ? null : balance / 100,
+    minimum: minimum === null ? null : minimum / 100,
+    minimumDate,
+    firstDeficit,
+    contribution: minimum === null ? null : Math.max(0, -minimum) / 100,
+    overdueBills: overdueBills / 100,
+    excludedOverdueIncome: excludedOverdueIncome / 100,
+    shiftedBeyond: shiftedBeyond / 100,
+  };
+}
+
 export type Kind = "entrada" | "saida";
 export type PaymentMethod =
   "dinheiro" | "pix" | "debito" | "credito" | "boleto" | "transferencia" | "cheque";

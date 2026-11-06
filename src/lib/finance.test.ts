@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  managementComparison,
+  managementHistory,
+  forecast90,
+  parseForecastOpening,
   dashboardDay,
   cashFlowProjection,
   cardReceivables,
@@ -25,6 +29,180 @@ import {
   addMonths,
   type CardSettings,
 } from "./finance";
+
+describe("crescimento e previsão gerencial", () => {
+  const txn = (overrides: Partial<Txn> = {}): Txn => ({
+    id: "id",
+    kind: "entrada",
+    payment_method: "pix",
+    status: "pendente",
+    competence_date: "2026-10-01",
+    due_date: "2026-11-10",
+    paid_date: null,
+    gross_amount: 100,
+    fee_amount: 0,
+    net_amount: 100,
+    description: "Teste",
+    person: null,
+    category_id: null,
+    nature: null,
+    installment_number: 1,
+    installment_total: 1,
+    group_id: null,
+    notes: null,
+    ...overrides,
+  });
+
+  it("compara mês corrente com os mesmos dias do anterior e exclui datas posteriores ao corte", () => {
+    const rows = [
+      txn({
+        competence_date: "2026-11-03",
+        status: "pago",
+        paid_date: "2026-11-04",
+        gross_amount: 300,
+        net_amount: 280,
+      }),
+      txn({ competence_date: "2026-10-03", status: "pago", paid_date: "2026-10-04" }),
+      txn({
+        competence_date: "2026-10-20",
+        status: "pago",
+        paid_date: "2026-10-20",
+        gross_amount: 5000,
+        net_amount: 5000,
+      }),
+      txn({ competence_date: "2026-11-20", gross_amount: 9000 }),
+    ];
+    const result = managementComparison(rows, "2026-11", "2026-11-06");
+    expect(result.previousEnd).toBe("2026-10-06");
+    expect(result.now.sales).toBe(300);
+    expect(result.now.received).toBe(280);
+    expect(result.sales.percent).toBe(200);
+    expect(result.received.percent).toBe(180);
+  });
+  it("compara meses fechados inteiros, mantendo outubro com despesas pagas zero", () => {
+    const result = managementComparison(
+      [
+        txn({ competence_date: "2026-09-30", status: "pago", paid_date: "2026-09-30" }),
+        txn({ status: "pago", paid_date: "2026-10-31", gross_amount: 200, net_amount: 200 }),
+      ],
+      "2026-10",
+      "2026-11-06",
+    );
+    expect(result.previousEnd).toBe("2026-09-30");
+    expect(result.now.margin).toBe(100);
+    expect(result.sales.percent).toBe(100);
+  });
+  it("limita o corte a fevereiro e não inventa percentual com base zero ou futura", () => {
+    expect(managementComparison([], "2026-03", "2026-03-31").previousEnd).toBe("2026-02-28");
+    expect(managementComparison([], "2024-03", "2024-03-31").previousEnd).toBe("2024-02-29");
+    expect(managementComparison([txn()], "2026-10", "2026-11-06").sales.percent).toBeNull();
+    expect(managementComparison([txn()], "2026-12", "2026-11-06").sales.delta).toBeNull();
+    expect(managementHistory([txn()], "2026-10", "2026-11-06")[0]?.sales).toBeNull();
+  });
+  it("não apresenta variação percentual de resultado sobre prejuízo anterior", () => {
+    const result = managementComparison(
+      [
+        txn({
+          kind: "saida",
+          status: "pago",
+          paid_date: "2026-09-01",
+          competence_date: "2026-09-01",
+        }),
+        txn({ status: "pago", paid_date: "2026-10-01" }),
+      ],
+      "2026-10",
+      "2026-11-06",
+    );
+    expect(result.result.delta).toBe(200);
+    expect(result.result.percent).toBeNull();
+  });
+  it("considera contas vencidas no primeiro dia, excluindo atrasos de receitas e itens pagos", () => {
+    const result = forecast90(
+      [
+        txn({ due_date: "2026-11-05" }),
+        txn({ kind: "saida", due_date: "2026-11-05", gross_amount: 50 }),
+        txn({ status: "pago", paid_date: "2026-11-06" }),
+        txn({ due_date: "2026-11-06" }),
+      ],
+      "2026-11-06",
+      0,
+    );
+    expect(result.overdueBills).toBe(50);
+    expect(result.excludedOverdueIncome).toBe(100);
+    expect(result.income).toBe(100);
+    expect(result.expenses).toBe(50);
+    expect(result.closing).toBe(50);
+  });
+  it("calcula necessidade de aporte pelo pior dia, mesmo com saldo final positivo", () => {
+    const result = forecast90(
+      [
+        txn({ kind: "saida", due_date: "2026-11-07", gross_amount: 300 }),
+        txn({ due_date: "2026-11-10", net_amount: 500 }),
+      ],
+      "2026-11-06",
+      100,
+    );
+    expect(result.minimum).toBe(-200);
+    expect(result.firstDeficit).toBe("2026-11-07");
+    expect(result.contribution).toBe(200);
+    expect(result.closing).toBe(300);
+  });
+  it("inclui exatamente 90 dias e não soma recebimento adiado para fora da janela", () => {
+    const result = forecast90(
+      [
+        txn({ due_date: "2027-02-03", net_amount: 100 }),
+        txn({ due_date: "2027-02-04", net_amount: 9999 }),
+      ],
+      "2026-11-06",
+      0,
+    );
+    expect(result.end).toBe("2027-02-03");
+    expect(result.days).toHaveLength(90);
+    expect(result.income).toBe(100);
+    const delayed = forecast90([txn({ due_date: "2027-02-03" })], "2026-11-06", 0, 15);
+    expect(delayed.income).toBe(0);
+    expect(delayed.shiftedBeyond).toBe(100);
+  });
+  it("desloca só receitas no cenário e mantém vencimentos de despesas", () => {
+    const result = forecast90(
+      [txn(), txn({ kind: "saida", gross_amount: 80 })],
+      "2026-11-06",
+      0,
+      15,
+    );
+    expect(result.firstDeficit).toBe("2026-11-10");
+    expect(result.days.find((day) => day.date === "2026-11-25")?.income).toBe(100);
+    expect(result.contribution).toBe(80);
+  });
+  it("sem saldo explícito mostra movimentos, mas não inventa saldo ou aporte", () => {
+    const result = forecast90([txn()], "2026-11-06", null);
+    expect(result.income).toBe(100);
+    expect(result.closing).toBeNull();
+    expect(result.minimum).toBeNull();
+    expect(result.contribution).toBeNull();
+    expect(result.months.every((row) => row.balance === null)).toBe(true);
+  });
+  it("preserva centavos e saldo inicial negativo", () => {
+    const result = forecast90(
+      [txn({ net_amount: 0.1 }), txn({ net_amount: 0.2 })],
+      "2026-11-06",
+      -0.1,
+    );
+    expect(result.income).toBe(0.3);
+    expect(result.closing).toBe(0.2);
+    expect(result.contribution).toBe(0.1);
+  });
+  it("valida dinheiro informado e os parâmetros da previsão", () => {
+    expect(parseForecastOpening("1.500,25")).toBe(1500.25);
+    expect(parseForecastOpening("0,00")).toBe(0);
+    expect(parseForecastOpening(" ")).toBeNull();
+    expect(parseForecastOpening("1,555")).toBeNull();
+    expect(parseForecastOpening("abc")).toBeNull();
+    expect(() => forecast90([], "2026-02-30", 0)).toThrow();
+    expect(() => forecast90([], "2026-11-06", NaN)).toThrow();
+    expect(() => forecast90([], "2026-11-06", 0, -1)).toThrow();
+  });
+});
 
 const settings: CardSettings = {
   debit_fee: 1.5,

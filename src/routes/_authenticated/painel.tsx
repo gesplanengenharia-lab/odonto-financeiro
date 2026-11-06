@@ -1,17 +1,9 @@
+import { GrowthPanel } from "@/components/finance/GrowthPanel";
+import { Forecast90Panel } from "@/components/finance/Forecast90Panel";
 import { useFinancialMonth } from "@/hooks/use-financial-month";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { Calculator, RefreshCw } from "lucide-react";
 import { pageHead } from "@/lib/head";
 import {
@@ -29,8 +21,8 @@ import {
   formatDate,
   formatMonth,
   formatPct,
-  futureReceivables,
   monthBilling,
+  managementComparison,
   monthKey,
   monthRange,
   nextMonths,
@@ -42,14 +34,7 @@ import {
 } from "@/lib/finance";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BillingTab, CashPixTab } from "@/components/finance/PainelTabs";
-import {
-  AlertsPanel,
-  CompositionPanel,
-  CostsPanel,
-  DefaultPanel,
-  FuturePanel,
-  KpiStrip,
-} from "@/components/finance/PainelResumo";
+import { AlertsPanel, CostsPanel, DefaultPanel, KpiStrip } from "@/components/finance/PainelResumo";
 import { categoriesQuery, txnsByCompetenceQuery, txnsByDueQuery } from "@/lib/queries";
 
 import {
@@ -80,7 +65,7 @@ function Painel() {
   const currentMonth = monthKey(today);
   const [month, setMonth] = useFinancialMonth();
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [tab, setTab] = useState("faturamento");
+  const [tab, setTab] = useState("evolucao");
   const detailsRef = useRef<HTMLElement>(null);
   const [selectedDay, setSelectedDay] = useState(today);
   const day = monthKey(selectedDay) === month ? selectedDay : `${month}-01`;
@@ -108,7 +93,6 @@ function Painel() {
   const pct = (value: number | null) => (value === null ? "sem base" : formatPct(value));
   const billing = monthBilling(comp, month);
   const composition = useMemo(() => receiptComposition(cash, month), [cash, month]);
-  const future = useMemo(() => futureReceivables(cash, month, today, 3), [cash, month, today]);
   const alerts = useMemo(() => dashboardAlerts(cash, today), [cash, today]);
   const defaulted = useMemo(
     () => defaultedReceivables(cash, month, false, today),
@@ -117,10 +101,7 @@ function Painel() {
   const liquid = useMemo(() => cashPixMonth(cash, month, today), [cash, month, today]);
   const margin = cashMargin(m.realized, m.received);
   const historyMonths = nextMonths(monthKey(historyStart), 6);
-  const history = historyMonths.map((k) => {
-    const row = dashboardMonth(cash, k, today);
-    return { mes: formatMonth(k), Recebido: row.received, Pago: row.paid };
-  });
+  const comparison = useMemo(() => managementComparison(cash, month, today), [cash, month, today]);
   const dreRows = [
     { label: "Receita bruta", cash: m.cashDre.grossRevenue, comp: s.grossRevenue },
     { label: "(−) Taxas de cartão", cash: -m.cashDre.cardFees, comp: -s.cardFees },
@@ -206,7 +187,18 @@ function Painel() {
             cash={m}
             composition={composition}
             margin={margin}
+            comparison={comparison}
           />
+
+          {!comparison.future && (
+            <p className="text-xs text-muted-foreground" aria-label="Período da comparação">
+              Comparação: {formatDate(comparison.start)} a {formatDate(comparison.end)} contra{" "}
+              {formatDate(comparison.previousStart)} a {formatDate(comparison.previousEnd)}
+              {comparison.partial
+                ? " · mesmos dias do mês anterior, limitado ao último dia existente."
+                : " · meses completos."}
+            </p>
+          )}
 
           {m.missingPaidDates > 0 && (
             <p className="text-xs text-warning">
@@ -275,61 +267,6 @@ function Painel() {
             </button>
             {detailsOpen && (
               <div id="financial-details" className="mt-5 space-y-6">
-                <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                  <FuturePanel month={month} currentMonth={currentMonth} data={future} />
-                  <DefaultPanel
-                    month={month}
-                    data={defaulted}
-                    monthRate={indicators.defaultPct}
-                    monthBase={indicators.dueAmount}
-                  />
-                  <CostsPanel
-                    month={month}
-                    summary={s}
-                    costs={costs}
-                    categoriesState={
-                      categoryQuery.isPending
-                        ? "loading"
-                        : categoryQuery.isError
-                          ? "error"
-                          : "ready"
-                    }
-                    onRetry={() => void categoryQuery.refetch()}
-                    onOpenDre={() => openTab("dre")}
-                  />
-                </div>
-
-                <details className="group surface-card px-5 py-4 text-sm">
-                  <summary className="cursor-pointer select-none font-medium text-foreground marker:text-primary">
-                    Como ler estes números
-                  </summary>
-                  <ul className="mt-3 list-disc space-y-1.5 pl-5 text-muted-foreground">
-                    <li>
-                      <strong className="text-foreground">Faturamento (competência)</strong>: vendas
-                      atribuídas ao mês, inclusive parcelas que só serão recebidas depois.
-                    </li>
-                    <li>
-                      <strong className="text-foreground">Recebimentos (caixa)</strong>: o que foi
-                      considerado recebido no mês, pela data do recebimento. Inclui baixas
-                      automáticas por vencimento, que não comprovam o depósito no banco.
-                    </li>
-                    <li>
-                      <strong className="text-foreground">Resultado de caixa</strong>: recebimentos
-                      menos despesas pagas no mês. Não é o saldo bancário — o saldo das contas fica
-                      na Tesouraria.
-                    </li>
-                    <li>
-                      <strong className="text-foreground">Margem de caixa</strong>: resultado de
-                      caixa dividido pelos recebimentos do mês. Quando não há recebimentos, aparece
-                      “Sem base para cálculo”.
-                    </li>
-                    <li>
-                      Aportes, transferências e financiamentos não são faturamento nem lucro
-                      operacional.
-                    </li>
-                  </ul>
-                </details>
-
                 <section
                   ref={detailsRef}
                   aria-labelledby="details-title"
@@ -349,12 +286,13 @@ function Painel() {
                         aria-label="Análises detalhadas"
                         className="h-auto w-max min-w-full justify-start"
                       >
+                        <TabsTrigger value="evolucao">Crescimento</TabsTrigger>
+                        <TabsTrigger value="previsao90">Caixa 90 dias</TabsTrigger>
                         <TabsTrigger value="faturamento">Faturamento</TabsTrigger>
                         <TabsTrigger value="formas">Recebimentos e agenda</TabsTrigger>
                         <TabsTrigger value="contas">À vista × contas</TabsTrigger>
                         <TabsTrigger value="dre">DRE e custos</TabsTrigger>
                         <TabsTrigger value="diario">Fechamento diário</TabsTrigger>
-                        <TabsTrigger value="evolucao">Evolução 6 meses</TabsTrigger>
                       </TabsList>
                     </div>
                     <TabsContent value="faturamento">
@@ -373,6 +311,13 @@ function Painel() {
                       />
                     </TabsContent>
                     <TabsContent value="formas" className="space-y-4">
+                      <DefaultPanel
+                        month={month}
+                        data={defaulted}
+                        monthRate={indicators.defaultPct}
+                        monthBase={indicators.dueAmount}
+                      />
+
                       <section
                         className="surface-card overflow-hidden"
                         aria-labelledby="methods-title"
@@ -489,6 +434,20 @@ function Painel() {
                       <CashPixTab month={month} data={liquid} />
                     </TabsContent>
                     <TabsContent value="dre" className="space-y-4">
+                      <CostsPanel
+                        month={month}
+                        summary={s}
+                        costs={costs}
+                        categoriesState={
+                          categoryQuery.isPending
+                            ? "loading"
+                            : categoryQuery.isError
+                              ? "error"
+                              : "ready"
+                        }
+                        onRetry={() => void categoryQuery.refetch()}
+                        onOpenDre={() => openTab("dre")}
+                      />
                       <section className="surface-card overflow-hidden" aria-labelledby="dre-title">
                         <div className="p-5">
                           <h2 id="dre-title" className="text-base font-semibold">
@@ -735,48 +694,43 @@ function Painel() {
                       </section>
                     </TabsContent>
                     <TabsContent value="evolucao">
-                      <div className="surface-card p-5">
-                        <h2 className="text-base font-semibold">
-                          Entradas e saídas realizadas — 6 meses
-                        </h2>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Somente valores pagos, pela data efetiva de pagamento.
-                        </p>
-                        <div className="mt-4 h-64">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={history} barGap={4}>
-                              <CartesianGrid vertical={false} stroke="var(--border)" />
-                              <XAxis
-                                dataKey="mes"
-                                tickLine={false}
-                                axisLine={false}
-                                fontSize={12}
-                                stroke="var(--muted-foreground)"
-                              />
-                              <YAxis
-                                tickLine={false}
-                                axisLine={false}
-                                fontSize={11}
-                                stroke="var(--muted-foreground)"
-                                tickFormatter={(v) => `${Math.round(v / 1000)}k`}
-                              />
-                              <Tooltip
-                                formatter={(v: number) => formatBRL(v)}
-                                contentStyle={{
-                                  borderRadius: 8,
-                                  border: "1px solid var(--border)",
-                                }}
-                              />
-                              <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-                              <Bar dataKey="Recebido" fill="var(--income)" radius={[4, 4, 0, 0]} />
-                              <Bar dataKey="Pago" fill="var(--expense)" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
+                      <GrowthPanel rows={cash} month={month} today={today} />
+                    </TabsContent>
+                    <TabsContent value="previsao90">
+                      <Forecast90Panel rows={cash} today={today} />
                     </TabsContent>
                   </Tabs>
                 </section>
+                <details className="group surface-card px-5 py-4 text-sm">
+                  <summary className="cursor-pointer select-none font-medium text-foreground marker:text-primary">
+                    Como ler estes números
+                  </summary>
+                  <ul className="mt-3 list-disc space-y-1.5 pl-5 text-muted-foreground">
+                    <li>
+                      <strong className="text-foreground">Faturamento (competência)</strong>: vendas
+                      atribuídas ao mês, inclusive parcelas que só serão recebidas depois.
+                    </li>
+                    <li>
+                      <strong className="text-foreground">Recebimentos (caixa)</strong>: o que foi
+                      considerado recebido no mês, pela data do recebimento. Inclui baixas
+                      automáticas por vencimento, que não comprovam o depósito no banco.
+                    </li>
+                    <li>
+                      <strong className="text-foreground">Resultado de caixa</strong>: recebimentos
+                      menos despesas pagas no mês. Não é o saldo bancário — o saldo das contas fica
+                      na Tesouraria.
+                    </li>
+                    <li>
+                      <strong className="text-foreground">Margem de caixa</strong>: resultado de
+                      caixa dividido pelos recebimentos do mês. Quando não há recebimentos, aparece
+                      “Sem base para cálculo”.
+                    </li>
+                    <li>
+                      Aportes, transferências e financiamentos não são faturamento nem lucro
+                      operacional.
+                    </li>
+                  </ul>
+                </details>
               </div>
             )}
           </div>

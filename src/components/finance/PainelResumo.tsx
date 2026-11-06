@@ -20,9 +20,11 @@ import {
   dashboardMonth,
   defaultedReceivables,
   formatBRL,
+  formatPct,
   formatMonth,
   futureReceivables,
   monthBilling,
+  managementComparison,
   receiptComposition,
   summarize,
   type DashboardAlert,
@@ -59,12 +61,14 @@ export function KpiStrip({
   cash,
   composition,
   margin,
+  comparison,
 }: {
   month: string;
   billing: ReturnType<typeof monthBilling>;
   cash: ReturnType<typeof dashboardMonth>;
   composition: ReturnType<typeof receiptComposition>;
   margin: number | null;
+  comparison?: ReturnType<typeof managementComparison>;
 }) {
   return (
     <section
@@ -79,6 +83,7 @@ export function KpiStrip({
         valueClass="text-foreground"
       >
         Inclui parcelas futuras.
+        {comparison && <ComparisonChange value={comparison.sales} future={comparison.future} />}
       </Kpi>
       <Kpi
         icon={<Wallet className="h-4 w-4" />}
@@ -88,6 +93,7 @@ export function KpiStrip({
         valueClass="text-income"
       >
         Pela data do recebimento.
+        {comparison && <ComparisonChange value={comparison.received} future={comparison.future} />}
       </Kpi>
       <Kpi
         icon={<ArrowDownRight className="h-4 w-4" />}
@@ -97,6 +103,7 @@ export function KpiStrip({
         valueClass="text-expense"
       >
         Pela data do pagamento.
+        {comparison && <ComparisonChange value={comparison.expenses} future={comparison.future} />}
       </Kpi>
       <Kpi
         icon={<TrendingUp className="h-4 w-4" />}
@@ -114,8 +121,39 @@ export function KpiStrip({
             %
           </strong>
         )}
+        {comparison && (
+          <ComparisonChange value={comparison.result} future={comparison.future} result />
+        )}
       </Kpi>
     </section>
+  );
+}
+
+function ComparisonChange({
+  value,
+  future,
+  result = false,
+}: {
+  value: { delta: number | null; percent: number | null };
+  future: boolean;
+  result?: boolean;
+}) {
+  if (future)
+    return (
+      <span className="mt-2 block text-[11px]">Período futuro · sem comparação de realizados</span>
+    );
+  if (value.delta === null)
+    return <span className="mt-2 block text-[11px]">Sem registros no período anterior</span>;
+  const delta = `${value.delta > 0 ? "+" : value.delta < 0 ? "−" : ""}${formatBRL(Math.abs(value.delta))}`;
+  return (
+    <span className="mt-2 block border-t border-border pt-2 text-[11px] text-foreground">
+      {result
+        ? delta
+        : value.percent === null
+          ? "Sem base para comparação"
+          : `${value.percent > 0 ? "+" : ""}${formatPct(value.percent)}`}
+      {!result && <span className="ml-1 text-muted-foreground">({delta})</span>}
+    </span>
   );
 }
 
@@ -283,7 +321,7 @@ export function AlertsPanel({ alerts }: { alerts: ReturnType<typeof dashboardAle
         </div>
       ) : (
         <ul className="-mx-2 space-y-1">
-          {alerts.map((a) => {
+          {alerts.slice(0, 3).map((a) => {
             const Icon = alertIcon[a.id];
             return (
               <li key={a.id}>
