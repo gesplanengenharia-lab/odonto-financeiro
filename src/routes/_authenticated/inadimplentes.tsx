@@ -64,7 +64,7 @@ function Inadimplentes() {
                     {g.rows.length} parcela(s) · maior atraso {g.maxDays} dia(s)
                   </p>
                 </div>
-                <span className="tabular font-display text-lg font-semibold text-expense">{formatBRL(g.total)}</span>
+                <span className="tabular text-lg font-bold text-expense">{formatBRL(g.total)}</span>
               </div>
               <ul className="mt-3 divide-y divide-border text-sm">
                 {g.rows.map((t) => (

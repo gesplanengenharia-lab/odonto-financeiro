@@ -95,7 +95,7 @@ function Simulacao() {
                   : "Informe o saldo inicial para calcular o aporte"}
               </p>
               <p
-                className={`tabular mt-2 font-display text-3xl font-semibold ${funding && funding.closing < 0 ? "text-expense" : "text-income"}`}
+                className={`tabular mt-2 text-3xl font-bold ${funding && funding.closing < 0 ? "text-expense" : "text-income"}`}
               >
                 {funding ? formatBRL(funding.closing) : "—"}
               </p>
