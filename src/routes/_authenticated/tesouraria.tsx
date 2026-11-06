@@ -10,7 +10,7 @@ import { PageHeader, EmptyState, StatCard } from "@/components/finance/ui";
 import { QueryFeedback } from "@/components/finance/QueryFeedback";
 import { TreasuryLinking } from "@/components/finance/TreasuryLinking";
 import { pageHead } from "@/lib/head";
-import { formatBRL, todayISO } from "@/lib/finance";
+import { formatBRL } from "@/lib/finance";
 import { myAccessQuery } from "@/lib/queries";
 import {
   accountsQuery, movementsQuery, reconciliationsQuery, accountBalancesQuery,
@@ -18,6 +18,7 @@ import {
   type FinancialAccount, type NewAccount, type NewMovement, type NewReconciliation,
 } from "@/lib/treasury-api";
 import { treasuryKindLabel, type TreasuryKind } from "@/lib/treasury";
+import { treasuryTodayISO } from "@/lib/treasury-time";
 
 export const Route = createFileRoute("/_authenticated/tesouraria")({
   head: () => pageHead("Tesouraria", "Contas, caixa, capital e conciliação bancária."),
@@ -50,7 +51,7 @@ function Tesouraria() {
   const accounts = useQuery({ ...accountsQuery(), enabled: admin });
   const movements = useQuery({ ...movementsQuery(), enabled: admin });
   const reconciliations = useQuery({ ...reconciliationsQuery(), enabled: admin });
-  const [asOf, setAsOf] = useState(todayISO());
+  const [asOf, setAsOf] = useState(treasuryTodayISO());
   const rows = accounts.data ?? [];
   const balances = useQuery({ ...accountBalancesQuery(rows, asOf), enabled: admin && rows.length > 0 && isISODate(asOf) });
   const confirmedBalances = useQuery({ ...accountBalancesQuery(rows, asOf, true), enabled: admin && rows.length > 0 && isISODate(asOf) });
@@ -90,7 +91,7 @@ function Tesouraria() {
         Lançamentos antigos sem conta vinculada não compõem os saldos bancários. Baixa automática não equivale a conciliação. Use a aba de vínculos para atribuir pagamentos após conferir a movimentação real.
       </div>
       <div className="mb-5 flex flex-wrap items-end gap-3">
-        <FormField label="Posição em"><Input type="date" value={asOf} max={todayISO()} onChange={(e) => setAsOf(e.target.value)} /></FormField>
+        <FormField label="Posição em"><Input type="date" value={asOf} max={treasuryTodayISO()} onChange={(e) => setAsOf(e.target.value)} /></FormField>
         <Button variant="outline" onClick={() => { void accounts.refetch(); void balances.refetch(); void confirmedBalances.refetch(); void movements.refetch(); void reconciliations.refetch(); }}>Atualizar posição</Button>
       </div>
       <QueryFeedback loading={accounts.isPending || (rows.length > 0 && (balances.isPending || confirmedBalances.isPending))}
@@ -178,11 +179,11 @@ function Tesouraria() {
 
 function AccountForm({ busy, save, close }: { busy: boolean; save: (v: NewAccount) => void; close: () => void }) {
   const [name, setName] = useState(""); const [kind, setKind] = useState<"banco" | "caixa">("banco");
-  const [date, setDate] = useState(todayISO()); const [balance, setBalance] = useState("");
+  const [date, setDate] = useState(treasuryTodayISO()); const [balance, setBalance] = useState("");
   function submit(e: FormEvent) {
     e.preventDefault();
     try {
-      if (!isISODate(date) || date > todayISO()) throw new Error("Data inicial inválida.");
+      if (!isISODate(date) || date > treasuryTodayISO()) throw new Error("Data inicial inválida.");
       if (!name.trim() || name.trim().length > 100) throw new Error("Informe o nome da conta.");
       if (balance.trim() === "") throw new Error("Confirme o saldo inicial real, inclusive zero.");
       save({ name: name.trim(), kind, opening_date: date, opening_balance: moneyInput(balance) });
@@ -191,7 +192,7 @@ function AccountForm({ busy, save, close }: { busy: boolean; save: (v: NewAccoun
   return <form onSubmit={submit} className="grid gap-4"><h2 className="text-xl font-semibold">Cadastrar conta</h2>
     <FormField label="Nome"><Input required maxLength={100} value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Banco principal ou caixa físico" /></FormField>
     <SelectField label="Tipo" value={kind} onChange={(v) => setKind(v as "banco" | "caixa")}><option value="banco">Conta bancária</option><option value="caixa">Caixa físico</option></SelectField>
-    <FormField label="Data de abertura"><Input required type="date" max={todayISO()} value={date} onChange={(e) => setDate(e.target.value)} /></FormField>
+    <FormField label="Data de abertura"><Input required type="date" max={treasuryTodayISO()} value={date} onChange={(e) => setDate(e.target.value)} /></FormField>
     <FormField label="Saldo inicial real (R$)"><Input required inputMode="decimal" value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="0,00" /></FormField>
     <p className="text-xs text-muted-foreground">Informe o saldo real no início do dia de abertura, antes dos pagamentos dessa data. As movimentações desse dia serão acrescentadas ao saldo inicial. Não inclua pagamentos anteriores novamente.</p>
     <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={close}>Cancelar</Button><Button type="submit" disabled={busy}>{busy ? "Salvando…" : "Cadastrar"}</Button></div>
@@ -202,7 +203,7 @@ function MovementForm({ accounts, busy, save, close }: { accounts: FinancialAcco
   const [kind, setKind] = useState<TreasuryKind>("aporte");
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [destination, setDestination] = useState("");
-  const [date, setDate] = useState(todayISO());
+  const [date, setDate] = useState(treasuryTodayISO());
   const [amount, setAmount] = useState(""); const [description, setDescription] = useState("");
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -211,7 +212,7 @@ function MovementForm({ accounts, busy, save, close }: { accounts: FinancialAcco
       if (!from) throw new Error("Selecione a conta de origem.");
       const dest = kind === "transferencia" ? accounts.find((a) => a.id === destination) : null;
       if (kind === "transferencia" && (!dest || dest.id === from.id)) throw new Error("Selecione outra conta de destino.");
-      if (!isISODate(date) || date > todayISO() || date < from.opening_date || (dest && date < dest.opening_date)) throw new Error("Data incompatível com a abertura das contas.");
+      if (!isISODate(date) || date > treasuryTodayISO() || date < from.opening_date || (dest && date < dest.opening_date)) throw new Error("Data incompatível com a abertura das contas.");
       if (!description.trim() || description.trim().length > 500) throw new Error("Descreva o motivo da operação.");
       const number = moneyInput(amount);
       if (number <= 0) throw new Error("O valor deve ser positivo.");
@@ -224,7 +225,7 @@ function MovementForm({ accounts, busy, save, close }: { accounts: FinancialAcco
     <SelectField label="Operação" value={kind} onChange={(v) => setKind(v as TreasuryKind)}>{movementKinds.map((k) => <option key={k} value={k}>{treasuryKindLabel(k)}</option>)}</SelectField>
     <SelectField label={kind === "transferencia" ? "Conta de origem" : "Conta"} value={accountId} onChange={setAccountId}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</SelectField>
     {kind === "transferencia" && <SelectField label="Conta de destino" value={destination} onChange={setDestination}><option value="">Selecione</option>{accounts.filter((a) => a.id !== accountId).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</SelectField>}
-    <FormField label="Data efetiva"><Input required type="date" max={todayISO()} value={date} onChange={(e) => setDate(e.target.value)} /></FormField>
+    <FormField label="Data efetiva"><Input required type="date" max={treasuryTodayISO()} value={date} onChange={(e) => setDate(e.target.value)} /></FormField>
     <FormField label="Valor (R$)"><Input required inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0,00" /></FormField>
     <FormField label="Descrição / identificação"><Input required maxLength={500} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex.: aporte de capital — sócio" /></FormField>
     <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={close}>Cancelar</Button><Button type="submit" disabled={busy}>{busy ? "Registrando…" : "Registrar movimento"}</Button></div>
@@ -233,13 +234,13 @@ function MovementForm({ accounts, busy, save, close }: { accounts: FinancialAcco
 
 function ReconciliationForm({ accounts, busy, save, close }: { accounts: FinancialAccount[]; busy: boolean; save: (v: NewReconciliation) => void; close: () => void }) {
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
-  const [date, setDate] = useState(todayISO()); const [balance, setBalance] = useState("");
+  const [date, setDate] = useState(treasuryTodayISO()); const [balance, setBalance] = useState("");
   const [notes, setNotes] = useState("");
   function submit(e: FormEvent) {
     e.preventDefault();
     try {
       const account = accounts.find((a) => a.id === accountId);
-      if (!account || !isISODate(date) || date > todayISO() || date < account.opening_date) throw new Error("Conta ou data inválida.");
+      if (!account || !isISODate(date) || date > treasuryTodayISO() || date < account.opening_date) throw new Error("Conta ou data inválida.");
       if (balance.trim() === "") throw new Error("Informe o valor no extrato, mesmo que seja zero.");
       if (notes.length > 1000) throw new Error("Observações muito longas.");
       save({ account_id: accountId, reconciliation_date: date, statement_balance: moneyInput(balance), notes: notes.trim() || null });
@@ -248,7 +249,7 @@ function ReconciliationForm({ accounts, busy, save, close }: { accounts: Financi
   return <form onSubmit={submit} className="grid gap-4"><h2 className="text-xl font-semibold">Conferir saldo</h2>
     <p className="text-xs text-muted-foreground">Registra a diferença entre o extrato e o saldo no sistema. Não confirma automaticamente lançamentos individuais.</p>
     <SelectField label="Conta" value={accountId} onChange={setAccountId}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</SelectField>
-    <FormField label="Data do extrato"><Input required type="date" max={todayISO()} value={date} onChange={(e) => setDate(e.target.value)} /></FormField>
+    <FormField label="Data do extrato"><Input required type="date" max={treasuryTodayISO()} value={date} onChange={(e) => setDate(e.target.value)} /></FormField>
     <FormField label="Saldo conforme extrato (R$)"><Input required inputMode="decimal" value={balance} onChange={(e) => setBalance(e.target.value)} placeholder="0,00" /></FormField>
     <FormField label="Observações (opcional)"><Input maxLength={1000} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Extrato bancário / referência" /></FormField>
     <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={close}>Cancelar</Button><Button type="submit" disabled={busy}>{busy ? "Conferindo…" : "Registrar conferência"}</Button></div>
