@@ -53,6 +53,7 @@ function Tesouraria() {
   const [asOf, setAsOf] = useState(todayISO());
   const rows = accounts.data ?? [];
   const balances = useQuery({ ...accountBalancesQuery(rows, asOf), enabled: admin && rows.length > 0 && isISODate(asOf) });
+  const confirmedBalances = useQuery({ ...accountBalancesQuery(rows, asOf, true), enabled: admin && rows.length > 0 && isISODate(asOf) });
   const [mode, setMode] = useState<"contas" | "movimentos" | "conferencias" | "vinculos">("contas");
   const [showCreate, setShowCreate] = useState<"conta" | "movimento" | "conferencia" | null>(null);
 
@@ -72,6 +73,10 @@ function Tesouraria() {
   const activeAccounts = rows.filter((a) => a.active);
   const total = rows.filter((a) => a.opening_date <= asOf)
     .reduce((sum, a) => sum + (balances.data?.[a.id] ?? 0), 0);
+  const confirmedTotal = rows.filter((a) => a.opening_date <= asOf)
+    .reduce((sum, a) => sum + (confirmedBalances.data?.[a.id] ?? 0), 0);
+  // Treasury capital movements exist in both views; the delta isolates payments without reconciliation.
+  const unconfirmedDelta = Math.round((total - confirmedTotal) * 100) / 100;
   return (
     <div>
       <PageHeader title="Tesouraria" subtitle="Posição financeira por conta, movimentos patrimoniais e conferências de extrato"
@@ -86,17 +91,18 @@ function Tesouraria() {
       </div>
       <div className="mb-5 flex flex-wrap items-end gap-3">
         <FormField label="Posição em"><Input type="date" value={asOf} max={todayISO()} onChange={(e) => setAsOf(e.target.value)} /></FormField>
-        <Button variant="outline" onClick={() => { void accounts.refetch(); void balances.refetch(); void movements.refetch(); void reconciliations.refetch(); }}>Atualizar posição</Button>
+        <Button variant="outline" onClick={() => { void accounts.refetch(); void balances.refetch(); void confirmedBalances.refetch(); void movements.refetch(); void reconciliations.refetch(); }}>Atualizar posição</Button>
       </div>
-      <QueryFeedback loading={accounts.isPending || (rows.length > 0 && balances.isPending)}
-        error={accounts.isError || balances.isError} retry={() => { void accounts.refetch(); void balances.refetch(); }}>
+      <QueryFeedback loading={accounts.isPending || (rows.length > 0 && (balances.isPending || confirmedBalances.isPending))}
+        error={accounts.isError || balances.isError || confirmedBalances.isError}
+        retry={() => { void accounts.refetch(); void balances.refetch(); void confirmedBalances.refetch(); }}> 
         {rows.length === 0 ? (
           <EmptyState title="Nenhuma conta cadastrada">Cadastre uma conta com o saldo e a data de abertura reais. Não crie saldos fictícios para compensar lançamentos antigos.</EmptyState>
         ) : (
           <div className="mb-6 grid gap-3 md:grid-cols-3">
-            <StatCard label="Saldo financeiro atribuído" value={total} hint="Soma das contas cadastradas; não representa todo o caixa histórico" tone="primary" />
-            <StatCard label="Contas ativas" value={0} raw={String(activeAccounts.length)} hint="Bancos e caixa físico" />
-            <StatCard label="Movimentos patrimoniais" value={0} raw={String((movements.data ?? []).filter((m) => !m.voided_at).length)} hint="Aportes, transferências e outras movimentações" />
+            <StatCard label="Saldo registrado" value={total} hint="Pagamentos baixados vinculados + movimentos patrimoniais. Ainda não é saldo bancário confirmado." tone="primary" />
+            <StatCard label="Saldo com baixas conciliadas" value={confirmedTotal} hint="Exclui pagamentos sem confirmação individual no extrato; inclui movimentos patrimoniais." tone="income" />
+            <StatCard label="Diferença a conferir" value={unconfirmedDelta} hint="Saldo registrado menos saldo com baixas conciliadas; pode ser negativo." tone="warning" />
           </div>
         )}
       </QueryFeedback>
@@ -116,8 +122,9 @@ function Tesouraria() {
               <h2 className="mt-3 font-semibold">{account.name}</h2>
               <p className="text-xs text-muted-foreground">{account.kind === "caixa" ? "Caixa físico" : "Conta bancária"} · Abertura {account.opening_date.split("-").reverse().join("/")}</p>
               <p className="mt-4 font-display text-2xl font-semibold tabular-nums">
-                {account.opening_date > asOf ? "Ainda não aberta" : balances.isError ? "Indisponível" : balances.data?.[account.id] === undefined ? "Calculando…" : formatBRL(balances.data?.[account.id] ?? 0)}
+                {account.opening_date > asOf ? "Ainda não aberta" : balances.isError || confirmedBalances.isError ? "Indisponível" : balances.data?.[account.id] === undefined ? "Calculando…" : formatBRL(balances.data?.[account.id] ?? 0)}
               </p>
+              <p className="mt-1 text-xs text-muted-foreground">Saldo com baixas conciliadas: {account.opening_date > asOf ? "—" : confirmedBalances.data?.[account.id] === undefined ? "Calculando…" : formatBRL(confirmedBalances.data[account.id])}</p>
               <p className="mt-1 text-xs text-muted-foreground">Saldo inicial: {formatBRL(account.opening_balance)}</p>
             </div>
           ))}
