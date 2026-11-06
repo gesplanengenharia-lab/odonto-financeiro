@@ -692,3 +692,103 @@ export function buildLaunchPlan(
   const balanceRows = buildLaunchRows({ ...common, amount: remaining, description: `${sale.description} · Saldo` }, settings, () => group);
   return { rows: [...entryRows, ...balanceRows].map(row => ({ ...row, group_id: group })), entryAmount: entry / 100, remaining };
 }
+
+// ---------------------------------------------------------------------------
+// Executive dashboard (painel) — every figure declares its period and base.
+
+/** Cash margin = cash result ÷ receipts of the same month. Null = no base. */
+export function cashMargin(realized: number, received: number) {
+  return received > 0 ? round2((realized / received) * 100) : null;
+}
+
+export type ReceiptGroupKey =
+  | "dinheiro" | "pix" | "debito" | "boleto_avista"
+  | "credito" | "boleto_parcelado" | "cheque" | "transferencia";
+
+export const RECEIPT_GROUP_LABELS: Record<ReceiptGroupKey, string> = {
+  dinheiro: "Dinheiro",
+  pix: "Pix",
+  debito: "Cartão de débito",
+  boleto_avista: "Boleto à vista",
+  credito: "Cartão de crédito",
+  boleto_parcelado: "Boleto parcelado",
+  cheque: "Cheque",
+  transferencia: "Transferência",
+};
+
+const receiptGroup = (t: Txn): ReceiptGroupKey =>
+  t.payment_method === "boleto"
+    ? isLiquidEntry(t) ? "boleto_avista" : "boleto_parcelado"
+    : t.payment_method;
+
+/** Receipts of the month (by payment date, net) split by form, with the
+ * upfront subtotal (cash, Pix, debit, single boleto). Percent base = total received. */
+export function receiptComposition(txns: Txn[], month: string) {
+  const { start, end } = monthRange(month);
+  const settled = txns.filter((t) => {
+    const date = t.paid_date || t.due_date;
+    return t.kind === "entrada" && t.status === "pago" && date >= start && date <= end;
+  });
+  const total = round2(settled.reduce((sum, t) => sum + cashValue(t), 0));
+  const share = (v: number) => (total > 0 ? round2((v / total) * 100) : null);
+  const upfrontKeys: ReceiptGroupKey[] = ["dinheiro", "pix", "debito", "boleto_avista"];
+  const rows = (Object.keys(RECEIPT_GROUP_LABELS) as ReceiptGroupKey[]).map((key) => {
+    const amount = round2(settled.filter((t) => receiptGroup(t) === key).reduce((s, t) => s + cashValue(t), 0));
+    return { key, label: RECEIPT_GROUP_LABELS[key], amount, percent: share(amount), upfront: upfrontKeys.includes(key) };
+  });
+  const upfront = round2(rows.filter((r) => r.upfront).reduce((s, r) => s + r.amount, 0));
+  return {
+    total,
+    upfront,
+    upfrontPct: share(upfront),
+    other: round2(total - upfront),
+    otherPct: share(round2(total - upfront)),
+    rows,
+    count: settled.length,
+  };
+}
+
+/** Pending patient receivables from the selected month on, never including
+ * overdue rows (those belong to inadimplência / card confirmation). */
+export function futureReceivables(txns: Txn[], month: string, today = todayISO(), count = 3) {
+  const open = txns.filter((t) => t.kind === "entrada" && t.status === "pendente" && t.due_date >= today);
+  const keys = nextMonths(month, count + 1);
+  const last = keys[keys.length - 1]!;
+  const sum = (rows: Txn[]) => round2(rows.reduce((s, t) => s + cashValue(t), 0));
+  const months = keys.map((key) => {
+    const rows = open.filter((t) => monthKey(t.due_date) === key);
+    return { month: key, amount: sum(rows), count: rows.length };
+  });
+  const laterRows = open.filter((t) => monthKey(t.due_date) > last);
+  const later = sum(laterRows);
+  const total = round2(months.reduce((s, m) => s + m.amount, 0) + later);
+  return { months, later, laterCount: laterRows.length, total, cardShare: sum(open.filter((t) => monthKey(t.due_date) >= month && (t.payment_method === "credito" || t.payment_method === "debito"))) };
+}
+
+export interface DashboardAlert {
+  id: "defaulted" | "overdue_bills" | "bills_week" | "cards_unconfirmed" | "missing_paid_date";
+  tone: "expense" | "warning" | "info";
+  title: string;
+  amount: number | null;
+  count: number;
+  to: "/inadimplentes" | "/contas" | "/cartoes" | "/lancamentos";
+}
+
+/** Situations that need action today — independent of the selected month. */
+export function dashboardAlerts(txns: Txn[], today = todayISO()): DashboardAlert[] {
+  const sum = (rows: Txn[]) => round2(rows.reduce((s, t) => s + cashValue(t), 0));
+  const pending = txns.filter((t) => t.status === "pendente");
+  const overdueBills = pending.filter((t) => t.kind === "saida" && t.due_date < today);
+  const weekBills = pending.filter((t) => t.kind === "saida" && t.due_date >= today && t.due_date <= addDays(today, 7));
+  const defaulted = txns.filter((t) => isDefaulted(t, today));
+  const cards = pending.filter((t) => t.kind === "entrada" && (t.payment_method === "credito" || t.payment_method === "debito") && t.due_date < today);
+  const missing = txns.filter((t) => t.status === "pago" && !t.paid_date);
+  const alerts: DashboardAlert[] = [
+    { id: "overdue_bills", tone: "expense", title: "Contas vencidas e não pagas", amount: sum(overdueBills), count: overdueBills.length, to: "/contas" },
+    { id: "defaulted", tone: "warning", title: "Recebimentos de pacientes em atraso", amount: sum(defaulted), count: defaulted.length, to: "/inadimplentes" },
+    { id: "cards_unconfirmed", tone: "warning", title: "Repasses de cartão vencidos sem confirmação", amount: sum(cards), count: cards.length, to: "/cartoes" },
+    { id: "bills_week", tone: "info", title: "Contas que vencem nos próximos 7 dias", amount: sum(weekBills), count: weekBills.length, to: "/contas" },
+    { id: "missing_paid_date", tone: "info", title: "Lançamentos pagos sem data de pagamento", amount: null, count: missing.length, to: "/lancamentos" },
+  ];
+  return alerts.filter((a) => a.count > 0);
+}

@@ -12,6 +12,10 @@ import {
   dashboardCosts,
   dashboardMonth,
   dashboardFunding,
+  cashMargin,
+  receiptComposition,
+  futureReceivables,
+  dashboardAlerts,
   type Txn,
   buildLaunchRows,
   buildLaunchPlan,
@@ -559,4 +563,76 @@ it("edição preserva a regra do líquido e rejeita valor, taxa e data inválido
   expect(()=>transactionDetails(original,{...input,gross_amount:Number.NaN})).toThrow();
   expect(()=>transactionDetails(original,{...input,competence_date:"2026-02-30"})).toThrow();
   expect(transactionDetails({...original,kind:"saida"},input).net_amount).toBe(200);
+});
+
+describe("painel executivo", () => {
+  const row = (patch: Partial<Txn> = {}): Txn => ({
+    id: Math.random().toString(36), kind: "entrada", description: "Teste", person: null, category_id: null, nature: null,
+    payment_method: "pix", status: "pago", competence_date: "2026-11-01", due_date: "2026-11-10", paid_date: "2026-11-10",
+    gross_amount: 100, fee_amount: 0, net_amount: 100, installment_number: 1, installment_total: 1, group_id: null, notes: null,
+    ...patch,
+  });
+
+  it("margem de caixa = resultado ÷ recebimentos; sem recebimentos não há base", () => {
+    expect(cashMargin(1092.46, 11891.51)).toBe(9.19);
+    expect(cashMargin(-500, 1000)).toBe(-50);
+    expect(cashMargin(-200, 0)).toBeNull();
+  });
+
+  it("composição separa à vista (dinheiro, Pix, débito, boleto único) e boleto parcelado, somando o total", () => {
+    const c = receiptComposition([
+      row({ payment_method: "dinheiro", net_amount: 50, gross_amount: 50 }),
+      row({ payment_method: "pix", net_amount: 150, gross_amount: 150 }),
+      row({ payment_method: "boleto", installment_total: 1, net_amount: 100, gross_amount: 100 }),
+      row({ payment_method: "boleto", installment_total: 3, net_amount: 200, gross_amount: 200 }),
+      row({ payment_method: "credito", gross_amount: 520, fee_amount: 20, net_amount: 500 }),
+      row({ payment_method: "pix", status: "pendente", paid_date: null, net_amount: 999 }),
+      row({ payment_method: "pix", paid_date: "2026-10-30", net_amount: 999 }),
+      row({ kind: "saida", payment_method: "pix", net_amount: 999, gross_amount: 999 }),
+    ], "2026-11");
+    expect(c.total).toBe(1000);
+    expect(c.upfront).toBe(300);
+    expect(c.upfrontPct).toBe(30);
+    expect(c.other).toBe(700);
+    expect(c.rows.find((r) => r.key === "boleto_parcelado")!.amount).toBe(200);
+    expect(c.rows.find((r) => r.key === "credito")!.percent).toBe(50);
+    expect(c.rows.reduce((s, r) => s + r.amount, 0)).toBe(1000);
+  });
+
+  it("composição de mês sem recebimentos não inventa percentuais", () => {
+    const c = receiptComposition([], "2026-11");
+    expect(c.total).toBe(0);
+    expect(c.upfrontPct).toBeNull();
+    expect(c.rows.every((r) => r.percent === null)).toBe(true);
+  });
+
+  it("recebíveis futuros começam no mês escolhido e excluem atrasados e pagos", () => {
+    const f = futureReceivables([
+      row({ status: "pendente", paid_date: null, due_date: "2026-11-03", net_amount: 70 }), // atrasado
+      row({ status: "pendente", paid_date: null, due_date: "2026-11-20", net_amount: 100 }),
+      row({ status: "pendente", paid_date: null, due_date: "2026-12-05", net_amount: 200 }),
+      row({ status: "pendente", paid_date: null, due_date: "2027-06-05", net_amount: 300 }),
+      row({ status: "pago", due_date: "2026-12-05", net_amount: 999 }),
+      row({ kind: "saida", status: "pendente", paid_date: null, due_date: "2026-12-05", gross_amount: 999, net_amount: 999 }),
+    ], "2026-11", "2026-11-06", 3);
+    expect(f.months.map((m) => m.amount)).toEqual([100, 200, 0, 0]);
+    expect(f.later).toBe(300);
+    expect(f.total).toBe(600);
+  });
+
+  it("alertas mostram só situações existentes, com valor e quantidade", () => {
+    const alerts = dashboardAlerts([
+      row({ kind: "saida", status: "pendente", paid_date: null, due_date: "2026-11-01", gross_amount: 80, net_amount: 80 }),
+      row({ kind: "saida", status: "pendente", paid_date: null, due_date: "2026-11-10", gross_amount: 40, net_amount: 40 }),
+      row({ payment_method: "boleto", status: "pendente", paid_date: null, due_date: "2026-11-02", net_amount: 120 }),
+      row({ payment_method: "credito", status: "pendente", paid_date: null, due_date: "2026-11-02", net_amount: 90 }),
+    ], "2026-11-06");
+    expect(alerts.map((a) => [a.id, a.amount, a.count])).toEqual([
+      ["overdue_bills", 80, 1],
+      ["defaulted", 120, 1],
+      ["cards_unconfirmed", 90, 1],
+      ["bills_week", 40, 1],
+    ]);
+    expect(dashboardAlerts([row()], "2026-11-06")).toEqual([]);
+  });
 });
