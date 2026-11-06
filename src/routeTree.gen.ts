@@ -26,6 +26,7 @@ import { Route as AuthenticatedPainelRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedProvisaoRouteImport } from './routes/_authenticated/provisao'
 import { Route as AuthenticatedRelatoriosRouteImport } from './routes/_authenticated/relatorios'
 import { Route as AuthenticatedSimulacaoRouteImport } from './routes/_authenticated/simulacao'
+import { Route as AuthenticatedTesourariaRouteImport } from './routes/_authenticated/tesouraria'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -115,6 +116,11 @@ const AuthenticatedSimulacaoRoute = AuthenticatedSimulacaoRouteImport.update({
   path: '/simulacao',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedTesourariaRoute = AuthenticatedTesourariaRouteImport.update({
+  id: '/tesouraria',
+  path: '/tesouraria',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -133,6 +139,7 @@ export interface FileRoutesByFullPath {
   '/provisao': typeof AuthenticatedProvisaoRoute
   '/relatorios': typeof AuthenticatedRelatoriosRoute
   '/simulacao': typeof AuthenticatedSimulacaoRoute
+  '/tesouraria': typeof AuthenticatedTesourariaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -151,6 +158,7 @@ export interface FileRoutesByTo {
   '/provisao': typeof AuthenticatedProvisaoRoute
   '/relatorios': typeof AuthenticatedRelatoriosRoute
   '/simulacao': typeof AuthenticatedSimulacaoRoute
+  '/tesouraria': typeof AuthenticatedTesourariaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -171,6 +179,7 @@ export interface FileRoutesById {
   '/_authenticated/provisao': typeof AuthenticatedProvisaoRoute
   '/_authenticated/relatorios': typeof AuthenticatedRelatoriosRoute
   '/_authenticated/simulacao': typeof AuthenticatedSimulacaoRoute
+  '/_authenticated/tesouraria': typeof AuthenticatedTesourariaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -191,6 +200,7 @@ export interface FileRouteTypes {
     | '/provisao'
     | '/relatorios'
     | '/simulacao'
+    | '/tesouraria'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -209,6 +219,7 @@ export interface FileRouteTypes {
     | '/provisao'
     | '/relatorios'
     | '/simulacao'
+    | '/tesouraria'
   id:
     | '__root__'
     | '/'
@@ -228,6 +239,7 @@ export interface FileRouteTypes {
     | '/_authenticated/provisao'
     | '/_authenticated/relatorios'
     | '/_authenticated/simulacao'
+    | '/_authenticated/tesouraria'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -358,6 +370,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSimulacaoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/tesouraria': {
+      id: '/_authenticated/tesouraria'
+      path: '/tesouraria'
+      fullPath: '/tesouraria'
+      preLoaderRoute: typeof AuthenticatedTesourariaRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
@@ -375,6 +394,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedProvisaoRoute: typeof AuthenticatedProvisaoRoute
   AuthenticatedRelatoriosRoute: typeof AuthenticatedRelatoriosRoute
   AuthenticatedSimulacaoRoute: typeof AuthenticatedSimulacaoRoute
+  AuthenticatedTesourariaRoute: typeof AuthenticatedTesourariaRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -391,6 +411,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedProvisaoRoute: AuthenticatedProvisaoRoute,
   AuthenticatedRelatoriosRoute: AuthenticatedRelatoriosRoute,
   AuthenticatedSimulacaoRoute: AuthenticatedSimulacaoRoute,
+  AuthenticatedTesourariaRoute: AuthenticatedTesourariaRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
