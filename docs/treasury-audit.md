@@ -35,10 +35,7 @@ As colunas necessárias foram encontradas com os tipos esperados. Os gatilhos de
 proteção e auditoria estão instalados. A baixa automática existente não implica
 confirmação bancária e não foi executada pela auditoria.
 
-**Limite conhecido:** o conector Lovable recusou uma consulta complementar por
-limite de ações do plano. Ela não foi executada. Portanto, ainda não se confirmou
-a ausência de baixas sem data, baixas futuras ou inconsistências entre bruto,
-taxa e líquido. A consulta foi acrescentada ao script de leitura para retomada.
+A consulta complementar de integridade também foi executada manualmente no SQL Editor do Lovable. Resultado para os 838 lançamentos: PostgreSQL **17.11**, versão de Tesouraria **1**, **zero baixas pagas sem data**, **zero baixas com data futura** e **zero valores para revisar** (NaN, negativos ou diferença líquido/bruto/taxa acima da tolerância). A consulta retornou apenas contagens agregadas; nenhum dado individual de paciente foi exposto. O limite do conector impediu execução automática por esta sessão, mas não impediu a validação manual mostrada na captura do usuário.
 
 ## Correções da branch
 
@@ -84,13 +81,12 @@ não comprova a integração autenticada da prévia Lovable com o banco real.
 
 ## Condições antes de mesclar ou publicar
 
-1. Retomar a consulta complementar somente de leitura quando o limite permitir.
-2. Revisar e aplicar a migração aditiva 0006 em uma etapa específica de atualização
-   do banco; confirmar versão, função, grants e invalidação de conciliação.
-3. Validar o fluxo autenticado com administrador e a negativa de acesso de um
+1. Aplicar a migração aditiva 0006 em uma etapa específica de atualização do banco;
+   confirmar versão, função, grants e invalidação de conciliação.
+2. Validar o fluxo autenticado com administrador e a negativa de acesso de um
    membro. Testes de escrita devem usar ambiente isolado com a mesma estrutura,
    nunca criar contas ou transações fictícias no banco da clínica.
-4. Conferir sincronização, prévia autenticada e CI do PR atualizado.
+3. Conferir sincronização e prévia autenticada. O CI do commit da branch já passou.
 
 O Lovable informou `latest_commit_sha=b22af582dde542332928f879600ac8572a2b13af`,
 correspondente à main. A branch de desenvolvimento não foi mesclada nem publicada.
