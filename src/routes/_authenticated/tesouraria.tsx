@@ -124,7 +124,7 @@ function Tesouraria() {
               <p className="mt-4 font-display text-2xl font-semibold tabular-nums">
                 {account.opening_date > asOf ? "Ainda não aberta" : balances.isError || confirmedBalances.isError ? "Indisponível" : balances.data?.[account.id] === undefined ? "Calculando…" : formatBRL(balances.data?.[account.id] ?? 0)}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">Saldo com baixas conciliadas: {account.opening_date > asOf ? "—" : confirmedBalances.data?.[account.id] === undefined ? "Calculando…" : formatBRL(confirmedBalances.data[account.id])}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Saldo com baixas conciliadas: {account.opening_date > asOf ? "—" : confirmedBalances.data?.[account.id] === undefined ? "Calculando…" : formatBRL(confirmedBalances.data?.[account.id] ?? 0)}</p>
               <p className="mt-1 text-xs text-muted-foreground">Saldo inicial: {formatBRL(account.opening_balance)}</p>
             </div>
           ))}
