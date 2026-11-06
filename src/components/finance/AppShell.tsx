@@ -145,7 +145,7 @@ export function AppShell() {
                       to={item.to}
                       onClick={() => setOpen(false)}
                       className="group relative flex items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
-                      activeProps={{ className: "bg-sidebar-accent text-sidebar-accent-foreground", "aria-current": "page" }}
+                      activeProps={{ className: "bg-sidebar-accent text-sidebar-accent-foreground" }}
                     >
                       {({ isActive }: { isActive: boolean }) => (
                         <>
