@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      bank_reconciliations: {
+        Row: {
+          account_id: string
+          created_at: string
+          created_by: string | null
+          difference: number | null
+          expected_balance: number
+          id: string
+          notes: string | null
+          reconciliation_date: string
+          statement_balance: number
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          created_by?: string | null
+          difference?: number | null
+          expected_balance: number
+          id?: string
+          notes?: string | null
+          reconciliation_date: string
+          statement_balance: number
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          created_by?: string | null
+          difference?: number | null
+          expected_balance?: number
+          id?: string
+          notes?: string | null
+          reconciliation_date?: string
+          statement_balance?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_reconciliations_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "financial_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       card_settings: {
         Row: {
           credit_days: number
@@ -71,6 +115,93 @@ export type Database = {
         }
         Relationships: []
       }
+      financial_accounts: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          kind: string
+          name: string
+          opening_balance: number
+          opening_date: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          kind: string
+          name: string
+          opening_balance?: number
+          opening_date: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          kind?: string
+          name?: string
+          opening_balance?: number
+          opening_date?: string
+        }
+        Relationships: []
+      }
+      financial_audit_log: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          id: string
+          new_data: Json | null
+          old_data: Json | null
+          operation: string
+          origin: string
+          record_id: string
+          table_name: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          operation: string
+          origin: string
+          record_id: string
+          table_name: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          operation?: string
+          origin?: string
+          record_id?: string
+          table_name?: string
+        }
+        Relationships: []
+      }
+      financial_schema_versions: {
+        Row: {
+          installed_at: string
+          version: number
+        }
+        Insert: {
+          installed_at?: string
+          version: number
+        }
+        Update: {
+          installed_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -102,6 +233,7 @@ export type Database = {
           description: string
           due_date: string
           fee_amount: number
+          financial_account_id: string | null
           gross_amount: number
           group_id: string | null
           id: string
@@ -114,6 +246,8 @@ export type Database = {
           paid_date: string | null
           payment_method: string
           person: string | null
+          reconciled_at: string | null
+          reconciled_by: string | null
           status: string
         }
         Insert: {
@@ -125,6 +259,7 @@ export type Database = {
           description: string
           due_date: string
           fee_amount?: number
+          financial_account_id?: string | null
           gross_amount: number
           group_id?: string | null
           id?: string
@@ -137,6 +272,8 @@ export type Database = {
           paid_date?: string | null
           payment_method: string
           person?: string | null
+          reconciled_at?: string | null
+          reconciled_by?: string | null
           status?: string
         }
         Update: {
@@ -148,6 +285,7 @@ export type Database = {
           description?: string
           due_date?: string
           fee_amount?: number
+          financial_account_id?: string | null
           gross_amount?: number
           group_id?: string | null
           id?: string
@@ -160,6 +298,8 @@ export type Database = {
           paid_date?: string | null
           payment_method?: string
           person?: string | null
+          reconciled_at?: string | null
+          reconciled_by?: string | null
           status?: string
         }
         Relationships: [
@@ -168,6 +308,73 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_financial_account_id_fkey"
+            columns: ["financial_account_id"]
+            isOneToOne: false
+            referencedRelation: "financial_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      treasury_movements: {
+        Row: {
+          account_id: string
+          amount: number
+          created_at: string
+          created_by: string | null
+          description: string
+          destination_account_id: string | null
+          id: string
+          kind: string
+          movement_date: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          description: string
+          destination_account_id?: string | null
+          id?: string
+          kind: string
+          movement_date: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          destination_account_id?: string | null
+          id?: string
+          kind?: string
+          movement_date?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "treasury_movements_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "financial_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treasury_movements_destination_account_id_fkey"
+            columns: ["destination_account_id"]
+            isOneToOne: false
+            referencedRelation: "financial_accounts"
             referencedColumns: ["id"]
           },
         ]
@@ -203,6 +410,10 @@ export type Database = {
         Args: { _module: string; _user_id: string }
         Returns: boolean
       }
+      financial_account_balance: {
+        Args: { _account_id: string; _as_of: string; _confirmed_only?: boolean }
+        Returns: number
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -211,6 +422,19 @@ export type Database = {
         Returns: boolean
       }
       is_team_member: { Args: { _user_id: string }; Returns: boolean }
+      set_transaction_reconciliation: {
+        Args: {
+          _account_id: string
+          _confirmed?: boolean
+          _paid_date: string
+          _transaction_id: string
+        }
+        Returns: string
+      }
+      treasury_balances_snapshot: {
+        Args: { _account_ids?: string[]; _as_of: string }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "admin" | "membro"
