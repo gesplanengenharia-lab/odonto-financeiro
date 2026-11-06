@@ -9,6 +9,7 @@ import {
   Activity,
   ArrowLeftRight,
   CalendarClock,
+  Landmark,
   CreditCard,
   Receipt,
   TrendingUp,
@@ -32,6 +33,7 @@ const nav = [
   { group: "Gestão", to: "/simulacao", label: "Simulação", icon: Calculator },
   { group: "Financeiro", to: "/lancamentos", label: "Lançamentos", icon: ArrowLeftRight },
   { group: "Financeiro", to: "/contas", label: "Contas a pagar e receber", icon: CalendarClock },
+  { group: "Financeiro", to: "/tesouraria", label: "Tesouraria", icon: Landmark },
   { group: "Financeiro", to: "/cartoes", label: "Cartões", icon: CreditCard },
   { group: "Financeiro", to: "/boletos", label: "Boletos", icon: Receipt },
   { group: "Gestão", to: "/provisao", label: "Provisão", icon: TrendingUp },
@@ -54,7 +56,10 @@ export function AppShell() {
   useEffect(() => {
     if (!userId) return;
     void supabase.rpc("auto_settle_due_entries").then(({ data }) => {
-      if (data && data > 0) void qc.invalidateQueries({ queryKey: ["txns"] });
+      if (data && data > 0) void Promise.all([
+        qc.invalidateQueries({ queryKey: ["txns"] }),
+        qc.invalidateQueries({ queryKey: ["treasury"] }),
+      ]);
     });
   }, [userId, qc]);
 
@@ -147,4 +152,5 @@ export function AppShell() {
     </div>
   );
 }
+
 

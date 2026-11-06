@@ -120,7 +120,10 @@ export const myAccessQuery = () =>
 
 export function useTxnMutations() {
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["txns"] });
+  const invalidate = () => Promise.all([
+    qc.invalidateQueries({ queryKey: ["txns"] }),
+    qc.invalidateQueries({ queryKey: ["treasury"] }),
+  ]);
   const requirePermission = async (module: string) => {
     const access = await qc.fetchQuery({ ...myAccessQuery(), staleTime: 0 });
     if (!canUse(access, module)) throw new Error("Você não tem permissão para esta operação.");
@@ -221,3 +224,4 @@ export const usageQuery = () =>
       return { profiles, transactions };
     },
   });
+

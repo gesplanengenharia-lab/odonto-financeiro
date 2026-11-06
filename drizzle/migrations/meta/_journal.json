@@ -43,6 +43,13 @@
       "when": 1793915369379,
       "tag": "0005_treasury_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793926513803,
+      "tag": "0006_treasury_atomic_balances",
+      "breakpoints": true
     }
   ]
 }
