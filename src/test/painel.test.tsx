@@ -76,17 +76,43 @@ describe("Painel e simulação", () => {
     expect(screen.queryByLabelText("Saldo inicial do mês (R$)")).not.toBeInTheDocument();
     const kpis = screen.getByLabelText("Indicadores principais do mês");
     expect(kpis.children).toHaveLength(4);
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "À vista × contas" }), { button: 0, ctrlKey: false });
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Ver análises e fechamento diário"));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "À vista × contas" }), {
+      button: 0,
+      ctrlKey: false,
+    });
     expect(screen.getByText("Abrir simulação de caixa")).toBeInTheDocument();
   });
-  it("margem de caixa usa os recebimentos como base e a DRE separa competência", () => {
-    state.rows.push({ ...state.rows[0]!, id: "paid", kind: "entrada", nature: null, status: "pago", paid_date: "2026-11-03", gross_amount: 1000, net_amount: 1000 });
-    state.rows.push({ ...state.rows[1]!, id: "future", status: "pendente", paid_date: null, due_date: "2026-12-03", gross_amount: 1000, net_amount: 1000 });
+  it("margem de caixa usa os recebimentos e mantém a DRE nos detalhes", () => {
+    state.rows.push({
+      ...state.rows[0]!,
+      id: "paid",
+      kind: "entrada",
+      nature: null,
+      status: "pago",
+      paid_date: "2026-11-03",
+      gross_amount: 1000,
+      net_amount: 1000,
+    });
+    state.rows.push({
+      ...state.rows[1]!,
+      id: "future",
+      status: "pendente",
+      paid_date: null,
+      due_date: "2026-12-03",
+      gross_amount: 1000,
+      net_amount: 1000,
+    });
     render(<Panel />);
     const kpis = within(screen.getByLabelText("Indicadores principais do mês"));
     expect(kpis.getByText("Sobra do mês")).toBeInTheDocument();
     expect(kpis.getByText("100,0%")).toBeInTheDocument();
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "DRE e custos" }), { button: 0, ctrlKey: false });
+    fireEvent.click(screen.getByText("Ver análises e fechamento diário"));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "DRE e custos" }), {
+      button: 0,
+      ctrlKey: false,
+    });
     const dre = within(screen.getByRole("region", { name: /DRE gerencial do mês/ }));
     expect(dre.getByText(/75,0%/)).toBeInTheDocument();
     expect(dre.getByText(/1.500,00/)).toBeInTheDocument();
@@ -127,6 +153,7 @@ describe("Painel e simulação", () => {
   });
   it("mantém a conferência diária alinhada ao mês e permite escolher outra data", () => {
     render(<Panel />);
+    fireEvent.click(screen.getByText("Ver análises e fechamento diário"));
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Fechamento diário" }), {
       button: 0,
       ctrlKey: false,
@@ -154,4 +181,3 @@ describe("Painel e simulação", () => {
     expect(screen.queryByLabelText("Resumo financeiro do mês")).not.toBeInTheDocument();
   });
 });
-

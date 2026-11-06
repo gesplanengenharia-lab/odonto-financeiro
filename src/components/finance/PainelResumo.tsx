@@ -30,11 +30,21 @@ import {
 import { Panel, PeriodTag, Pct } from "@/components/finance/ui";
 import { cn } from "@/lib/utils";
 
-const share = (value: number, total: number) => (total > 0 ? Math.round((value / total) * 1000) / 10 : null);
+const share = (value: number, total: number) =>
+  total > 0 ? Math.round((value / total) * 1000) / 10 : null;
 
-function MoreLink({ to, children }: { to: "/inadimplentes" | "/contas" | "/provisao" | "/relatorios" | "/cartoes"; children: ReactNode }) {
+function MoreLink({
+  to,
+  children,
+}: {
+  to: "/inadimplentes" | "/contas" | "/provisao" | "/relatorios" | "/cartoes";
+  children: ReactNode;
+}) {
   return (
-    <Link to={to} className="inline-flex items-center gap-0.5 text-sm font-medium text-primary hover:underline">
+    <Link
+      to={to}
+      className="inline-flex items-center gap-0.5 text-sm font-medium text-primary hover:underline"
+    >
       {children}
       <ChevronRight className="h-4 w-4" aria-hidden="true" />
     </Link>
@@ -56,87 +66,55 @@ export function KpiStrip({
   composition: ReturnType<typeof receiptComposition>;
   margin: number | null;
 }) {
-  const label = formatMonth(month);
-  const receivedShare = share(billing.received, billing.total);
-  const profit = cash.realized >= 0;
   return (
-    <section aria-label="Indicadores principais do mês" className="surface-card grid overflow-hidden sm:grid-cols-2 xl:grid-cols-4">
+    <section
+      aria-label="Indicadores principais do mês"
+      className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+    >
       <Kpi
         icon={<Receipt className="h-4 w-4" />}
         title="Faturamento"
-        tag={`Competência · ${label}`}
+        tag="Vendas do mês"
         value={formatBRL(billing.total)}
         valueClass="text-foreground"
       >
-        {billing.count === 0 ? (
-          <span>Nenhuma venda registrada com competência neste mês.</span>
-        ) : (
-          <>
-            <span>Vendas do mês, incluindo parcelas futuras.</span>
-            <span className="block">
-              <Pct value={receivedShare} className="font-semibold text-foreground" /> já recebido ·{" "}
-              <strong className="tabular font-semibold text-foreground">{formatBRL(billing.pending)}</strong> a receber
-            </span>
-          </>
-        )}
+        Inclui parcelas futuras.
       </Kpi>
       <Kpi
         icon={<Wallet className="h-4 w-4" />}
         title="Recebimentos"
-        tag={`Caixa · ${label}`}
+        tag="Entrou no mês"
         value={formatBRL(cash.received)}
         valueClass="text-income"
       >
-        <span>Tudo o que entrou, pela data do recebimento.</span>
-        <span className="block">
-          À vista <strong className="tabular font-semibold text-foreground">{formatBRL(composition.upfront)}</strong> · demais{" "}
-          <strong className="tabular font-semibold text-foreground">{formatBRL(composition.other)}</strong>
-        </span>
+        Pela data do recebimento.
       </Kpi>
       <Kpi
         icon={<ArrowDownRight className="h-4 w-4" />}
         title="Despesas pagas"
-        tag={`Caixa · ${label}`}
+        tag="Saiu no mês"
         value={formatBRL(cash.paid)}
         valueClass="text-expense"
       >
-        <span>Saídas pela data do pagamento.</span>
-        <span className="block">
-          <strong className="tabular font-semibold text-foreground">{formatBRL(cash.toPay)}</strong> ainda em aberto no mês
-          {cash.priorToPay > 0 && (
-            <span className="text-warning"> · +{formatBRL(cash.priorToPay)} de meses anteriores</span>
-          )}
-        </span>
+        Pela data do pagamento.
       </Kpi>
-      <div className="surface-ink m-0 flex flex-col gap-3 rounded-none p-5 sm:p-6">
-        <div className="flex items-center justify-between gap-2">
-          <span className="flex items-center gap-2 text-sm font-semibold">
-            {profit ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-            Resultado de caixa
-          </span>
-          <span className="rounded-full border border-ink-foreground/20 px-2 py-0.5 text-[11px] font-medium text-ink-muted">
-            {label}
-          </span>
-        </div>
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-ink-muted">{profit ? "Sobra do mês" : "Falta no mês"}</p>
-          <p className="tabular mt-0.5 text-[1.85rem] font-bold leading-tight tracking-tight">
-            {profit ? "" : "− "}
-            {formatBRL(Math.abs(cash.realized))}
-          </p>
-        </div>
-        <p className="text-xs leading-relaxed text-ink-muted">
-          Margem de caixa{" "}
-          {margin === null ? (
-            <span className="font-semibold text-ink-foreground">sem base para cálculo</span>
-          ) : (
-            <strong className="tabular text-sm text-ink-foreground">
-              {margin.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
-            </strong>
-          )}
-          <span className="block">Recebimentos − despesas pagas; margem = resultado ÷ recebimentos. Não é saldo bancário.</span>
-        </p>
-      </div>
+      <Kpi
+        icon={<TrendingUp className="h-4 w-4" />}
+        title="Resultado de caixa"
+        tag={cash.realized >= 0 ? "Sobra do mês" : "Falta no mês"}
+        value={formatBRL(cash.realized)}
+        valueClass={cash.realized >= 0 ? "text-income" : "text-expense"}
+      >
+        Margem{" "}
+        {margin === null ? (
+          <span>sem base para cálculo</span>
+        ) : (
+          <strong className="font-medium">
+            {margin.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+            %
+          </strong>
+        )}
+      </Kpi>
     </section>
   );
 }
@@ -157,15 +135,19 @@ function Kpi({
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 border-b border-border p-5 sm:p-6 xl:border-b-0 xl:border-r sm:[&:nth-child(odd)]:border-r xl:[&:nth-child(3)]:border-r">
+    <div className="surface-card flex flex-col gap-3 p-5">
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <span className="text-primary">{icon}</span>
           {title}
         </span>
-        <PeriodTag>{tag}</PeriodTag>
+        <span className="text-[11px] text-muted-foreground">{tag}</span>
       </div>
-      <p className={cn("tabular text-[1.85rem] font-bold leading-tight tracking-tight", valueClass)}>{value}</p>
+      <p
+        className={cn("tabular text-[1.85rem] font-bold leading-tight tracking-tight", valueClass)}
+      >
+        {value}
+      </p>
       <p className="space-y-0.5 text-xs leading-relaxed text-muted-foreground">{children}</p>
     </div>
   );
@@ -173,7 +155,13 @@ function Kpi({
 
 /* ------------------------------------------------------- Composition */
 
-export function CompositionPanel({ month, data }: { month: string; data: ReturnType<typeof receiptComposition> }) {
+export function CompositionPanel({
+  month,
+  data,
+}: {
+  month: string;
+  data: ReturnType<typeof receiptComposition>;
+}) {
   const rows = data.rows.filter((r) => r.amount > 0);
   return (
     <Panel
@@ -190,15 +178,23 @@ export function CompositionPanel({ month, data }: { month: string; data: ReturnT
         <>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl bg-income-soft px-4 py-3">
-              <p className="text-xs font-semibold text-income">À vista — dinheiro, Pix, débito e boleto à vista</p>
-              <p className="tabular mt-1 text-xl font-bold text-foreground">{formatBRL(data.upfront)}</p>
+              <p className="text-xs font-semibold text-income">
+                À vista — dinheiro, Pix, débito e boleto à vista
+              </p>
+              <p className="tabular mt-1 text-xl font-bold text-foreground">
+                {formatBRL(data.upfront)}
+              </p>
               <p className="text-xs text-muted-foreground">
                 <Pct value={data.upfrontPct} /> do recebido · disponível para pagar as contas
               </p>
             </div>
             <div className="rounded-xl bg-muted px-4 py-3">
-              <p className="text-xs font-semibold text-muted-foreground">Parcelados e outros — crédito, boleto parcelado, cheque</p>
-              <p className="tabular mt-1 text-xl font-bold text-foreground">{formatBRL(data.other)}</p>
+              <p className="text-xs font-semibold text-muted-foreground">
+                Parcelados e outros — crédito, boleto parcelado, cheque
+              </p>
+              <p className="tabular mt-1 text-xl font-bold text-foreground">
+                {formatBRL(data.other)}
+              </p>
               <p className="text-xs text-muted-foreground">
                 <Pct value={data.otherPct} /> do recebido
               </p>
@@ -206,15 +202,29 @@ export function CompositionPanel({ month, data }: { month: string; data: ReturnT
           </div>
           <ul className="mt-5 space-y-3" aria-label="Recebimentos por forma de pagamento">
             {rows.map((r) => (
-              <li key={r.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 sm:grid-cols-[11rem_minmax(0,1fr)_auto]">
+              <li
+                key={r.key}
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 sm:grid-cols-[11rem_minmax(0,1fr)_auto]"
+              >
                 <span className="flex items-center gap-2 text-sm font-medium">
                   {r.label}
                   {r.upfront && (
-                    <span className="rounded bg-income-soft px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-income">à vista</span>
+                    <span className="rounded bg-income-soft px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-income">
+                      à vista
+                    </span>
                   )}
                 </span>
-                <span className="order-3 col-span-2 h-2 overflow-hidden rounded-full bg-muted sm:order-none sm:col-span-1" aria-hidden="true">
-                  <span className={cn("block h-full rounded-full", r.upfront ? "bg-income" : "bg-primary/70")} style={{ width: `${r.percent ?? 0}%` }} />
+                <span
+                  className="order-3 col-span-2 h-2 overflow-hidden rounded-full bg-muted sm:order-none sm:col-span-1"
+                  aria-hidden="true"
+                >
+                  <span
+                    className={cn(
+                      "block h-full rounded-full",
+                      r.upfront ? "bg-income" : "bg-primary/70",
+                    )}
+                    style={{ width: `${r.percent ?? 0}%` }}
+                  />
                 </span>
                 <span className="text-right text-sm">
                   <span className="tabular font-semibold">{formatBRL(r.amount)}</span>
@@ -226,8 +236,9 @@ export function CompositionPanel({ month, data }: { month: string; data: ReturnT
             ))}
           </ul>
           <p className="mt-5 border-t border-border pt-3 text-xs text-muted-foreground">
-            Percentuais sobre {formatBRL(data.total)} recebidos no mês ({data.count} lançamento{data.count === 1 ? "" : "s"}). Inclui baixas
-            automáticas por vencimento — a confirmação no extrato é feita na Tesouraria.
+            Percentuais sobre {formatBRL(data.total)} recebidos no mês ({data.count} lançamento
+            {data.count === 1 ? "" : "s"}). Inclui baixas automáticas por vencimento — a confirmação
+            no extrato é feita na Tesouraria.
           </p>
         </>
       )}
@@ -249,16 +260,26 @@ const alertTone: Record<DashboardAlert["tone"], string> = {
   warning: "bg-warning-soft text-warning",
   info: "bg-info-soft text-info",
 };
-const alertLabel: Record<DashboardAlert["tone"], string> = { expense: "Urgente", warning: "Atenção", info: "Agenda" };
+const alertLabel: Record<DashboardAlert["tone"], string> = {
+  expense: "Urgente",
+  warning: "Atenção",
+  info: "Agenda",
+};
 
 export function AlertsPanel({ alerts }: { alerts: ReturnType<typeof dashboardAlerts> }) {
   return (
-    <Panel id="alerts-title" title="Precisa de atenção" tag={<PeriodTag>Hoje · todos os meses</PeriodTag>}>
+    <Panel
+      id="alerts-title"
+      title="Precisa de atenção"
+      tag={<PeriodTag>Hoje · todos os meses</PeriodTag>}
+    >
       {alerts.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-xl bg-income-soft px-4 py-8 text-center">
           <CheckCircle2 className="h-6 w-6 text-income" aria-hidden="true" />
           <p className="text-sm font-semibold text-foreground">Nada pendente de ação hoje</p>
-          <p className="text-xs text-muted-foreground">Sem contas vencidas, atrasos ou repasses pendentes.</p>
+          <p className="text-xs text-muted-foreground">
+            Sem contas vencidas, atrasos ou repasses pendentes.
+          </p>
         </div>
       ) : (
         <ul className="-mx-2 space-y-1">
@@ -266,18 +287,36 @@ export function AlertsPanel({ alerts }: { alerts: ReturnType<typeof dashboardAle
             const Icon = alertIcon[a.id];
             return (
               <li key={a.id}>
-                <Link to={a.to} className="flex items-start gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted">
-                  <span className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", alertTone[a.tone])}>
+                <Link
+                  to={a.to}
+                  className="flex items-start gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted"
+                >
+                  <span
+                    className={cn(
+                      "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+                      alertTone[a.tone],
+                    )}
+                  >
                     <Icon className="h-4 w-4" aria-hidden="true" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium leading-snug text-foreground">{a.title}</span>
+                    <span className="block text-sm font-medium leading-snug text-foreground">
+                      {a.title}
+                    </span>
                     <span className="text-xs text-muted-foreground">
-                      <span className="font-semibold">{alertLabel[a.tone]}</span> · {a.count} lançamento{a.count === 1 ? "" : "s"}
+                      <span className="font-semibold">{alertLabel[a.tone]}</span> · {a.count}{" "}
+                      lançamento{a.count === 1 ? "" : "s"}
                     </span>
                   </span>
-                  {a.amount !== null && <span className="tabular shrink-0 pt-0.5 text-sm font-semibold">{formatBRL(a.amount)}</span>}
-                  <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  {a.amount !== null && (
+                    <span className="tabular shrink-0 pt-0.5 text-sm font-semibold">
+                      {formatBRL(a.amount)}
+                    </span>
+                  )}
+                  <ChevronRight
+                    className="mt-1 h-4 w-4 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                 </Link>
               </li>
             );
@@ -309,17 +348,28 @@ export function FuturePanel({
       action={<MoreLink to="/provisao">Provisão</MoreLink>}
     >
       <p className="tabular text-2xl font-bold tracking-tight">{formatBRL(data.total)}</p>
-      <p className="text-xs text-muted-foreground">ainda vão entrar, pelos vencimentos cadastrados</p>
+      <p className="text-xs text-muted-foreground">
+        ainda vão entrar, pelos vencimentos cadastrados
+      </p>
       <ul className="mt-4 space-y-2.5">
         {data.months.map((m, i) => (
           <BarRow
             key={m.month}
-            label={i === 0 && m.month === currentMonth ? `${formatMonth(m.month)} · restante` : formatMonth(m.month)}
+            label={
+              i === 0 && m.month === currentMonth
+                ? `${formatMonth(m.month)} · restante`
+                : formatMonth(m.month)
+            }
             amount={m.amount}
             width={(m.amount / max) * 100}
           />
         ))}
-        <BarRow label={`Após ${formatMonth(last)}`} amount={data.later} width={(data.later / max) * 100} muted />
+        <BarRow
+          label={`Após ${formatMonth(last)}`}
+          amount={data.later}
+          width={(data.later / max) * 100}
+          muted
+        />
       </ul>
       <p className="mt-auto border-t border-border pt-3 text-xs text-muted-foreground">
         Inclui {formatBRL(data.cardShare)} de cartões. Previsão não é dinheiro disponível.
@@ -328,12 +378,25 @@ export function FuturePanel({
   );
 }
 
-function BarRow({ label, amount, width, muted }: { label: string; amount: number; width: number; muted?: boolean }) {
+function BarRow({
+  label,
+  amount,
+  width,
+  muted,
+}: {
+  label: string;
+  amount: number;
+  width: number;
+  muted?: boolean;
+}) {
   return (
     <li className="grid grid-cols-[6.5rem_minmax(0,1fr)_auto] items-center gap-3 text-sm">
       <span className={cn("truncate", muted && "text-muted-foreground")}>{label}</span>
       <span className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-        <span className={cn("block h-full rounded-full", muted ? "bg-primary/35" : "bg-primary/70")} style={{ width: `${width}%` }} />
+        <span
+          className={cn("block h-full rounded-full", muted ? "bg-primary/35" : "bg-primary/70")}
+          style={{ width: `${width}%` }}
+        />
       </span>
       <span className="tabular text-right font-semibold">{formatBRL(amount)}</span>
     </li>
@@ -361,7 +424,12 @@ export function DefaultPanel({
       tag={<PeriodTag>Pacientes · vencidos até ontem</PeriodTag>}
       action={<MoreLink to="/inadimplentes">Ver todos</MoreLink>}
     >
-      <p className={cn("tabular text-2xl font-bold tracking-tight", data.total > 0 ? "text-warning" : "text-foreground")}>
+      <p
+        className={cn(
+          "tabular text-2xl font-bold tracking-tight",
+          data.total > 0 ? "text-warning" : "text-foreground",
+        )}
+      >
         {formatBRL(data.total)}
       </p>
       <p className="text-xs text-muted-foreground">
@@ -377,7 +445,9 @@ export function DefaultPanel({
         <div className="flex items-center justify-between gap-3 px-3 py-2">
           <dt>
             Taxa de {formatMonth(month)}
-            <span className="block text-[11px] text-muted-foreground">sobre {formatBRL(monthBase)} vencidos no mês, exceto cartões</span>
+            <span className="block text-[11px] text-muted-foreground">
+              sobre {formatBRL(monthBase)} vencidos no mês, exceto cartões
+            </span>
           </dt>
           <dd className="font-semibold">
             <Pct value={monthRate} />
@@ -423,20 +493,34 @@ export function CostsPanel({
   onOpenDre: () => void;
 }) {
   const segments = costs.filter((g) => g.amount > 0);
-  const top = costs.flatMap((g) => g.rows.map((r) => ({ ...r, nature: g.nature }))).sort((a, b) => b.amount - a.amount).slice(0, 4);
-  const color = (nature: string | null) => (nature === "fixa" ? "bg-primary" : nature === "variavel" ? "bg-chart-4" : "bg-muted-foreground/50");
+  const top = costs
+    .flatMap((g) => g.rows.map((r) => ({ ...r, nature: g.nature })))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 4);
+  const color = (nature: string | null) =>
+    nature === "fixa"
+      ? "bg-primary"
+      : nature === "variavel"
+        ? "bg-chart-4"
+        : "bg-muted-foreground/50";
   return (
     <Panel
       id="costs-title"
       title="Custos fixos e variáveis"
       tag={<PeriodTag>Competência · {formatMonth(month)} · pagos e em aberto</PeriodTag>}
       action={
-        <button type="button" onClick={onOpenDre} className="inline-flex items-center gap-0.5 text-sm font-medium text-primary hover:underline">
+        <button
+          type="button"
+          onClick={onOpenDre}
+          className="inline-flex items-center gap-0.5 text-sm font-medium text-primary hover:underline"
+        >
           DRE <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </button>
       }
     >
-      <p className="tabular text-2xl font-bold tracking-tight text-expense">{formatBRL(summary.totalExpenses)}</p>
+      <p className="tabular text-2xl font-bold tracking-tight text-expense">
+        {formatBRL(summary.totalExpenses)}
+      </p>
       <p className="text-xs text-muted-foreground">em despesas atribuídas ao mês</p>
       {summary.totalExpenses === 0 ? (
         <p className="mt-4 rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
@@ -446,7 +530,11 @@ export function CostsPanel({
         <>
           <div className="mt-4 flex h-2.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
             {segments.map((g) => (
-              <span key={g.label} className={cn("h-full", color(g.nature))} style={{ width: `${g.percent ?? 0}%` }} />
+              <span
+                key={g.label}
+                className={cn("h-full", color(g.nature))}
+                style={{ width: `${g.percent ?? 0}%` }}
+              />
             ))}
           </div>
           <ul className="mt-3 space-y-1.5 text-sm">
@@ -455,7 +543,10 @@ export function CostsPanel({
               .map((g) => (
                 <li key={g.label} className="flex items-center justify-between gap-3">
                   <span className="flex items-center gap-2">
-                    <span className={cn("h-2.5 w-2.5 rounded-sm", color(g.nature))} aria-hidden="true" />
+                    <span
+                      className={cn("h-2.5 w-2.5 rounded-sm", color(g.nature))}
+                      aria-hidden="true"
+                    />
                     {g.label}
                   </span>
                   <span className="text-right">
@@ -468,9 +559,13 @@ export function CostsPanel({
               ))}
           </ul>
           <div className="mt-4 border-t border-border pt-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Maiores categorias</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Maiores categorias
+            </p>
             {categoriesState === "loading" ? (
-              <p className="text-sm text-muted-foreground" role="status">Carregando categorias…</p>
+              <p className="text-sm text-muted-foreground" role="status">
+                Carregando categorias…
+              </p>
             ) : categoriesState === "error" ? (
               <p className="text-sm text-expense" role="alert">
                 Não foi possível carregar as categorias.{" "}
@@ -481,7 +576,10 @@ export function CostsPanel({
             ) : (
               <ul className="space-y-1.5 text-sm">
                 {top.map((r) => (
-                  <li key={`${r.nature}-${r.id}`} className="flex items-center justify-between gap-3">
+                  <li
+                    key={`${r.nature}-${r.id}`}
+                    className="flex items-center justify-between gap-3"
+                  >
                     <span className="min-w-0 truncate">{r.name}</span>
                     <span className="tabular shrink-0 font-semibold">{formatBRL(r.amount)}</span>
                   </li>
@@ -489,10 +587,11 @@ export function CostsPanel({
               </ul>
             )}
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">Percentuais sobre o total de despesas do mês.</p>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Percentuais sobre o total de despesas do mês.
+          </p>
         </>
       )}
     </Panel>
   );
 }
-

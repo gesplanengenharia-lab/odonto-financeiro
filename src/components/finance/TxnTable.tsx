@@ -10,7 +10,16 @@ import { canUse } from "@/lib/access";
 import { categoriesQuery, myAccessQuery, useTxnMutations } from "@/lib/queries";
 import { KindBadge, Money, StatusBadge } from "./ui";
 
-export function TxnTable({ rows, showFee = false, dateField = "due_date" }: { rows: Txn[]; showFee?: boolean; dateField?: "due_date" | "competence_date" }) {
+export function TxnTable({
+  rows,
+  showFee = false,
+  dateField = "due_date",
+}: {
+  rows: Txn[];
+  showFee?: boolean;
+  dateField?: "due_date" | "competence_date";
+}) {
+  const hasFees = showFee && rows.some((row) => row.fee_amount > 0);
   const { data: categories = [] } = useQuery(categoriesQuery());
   const catName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? "—";
   const { data: access } = useQuery(myAccessQuery());
@@ -20,18 +29,25 @@ export function TxnTable({ rows, showFee = false, dateField = "due_date" }: { ro
   async function toggle(t: Txn) {
     try {
       await setPaid.mutateAsync({ ids: [t.id], paid: t.status !== "pago" });
-      toast.success(t.kind === "entrada" && t.payment_method === "boleto" && t.status === "pago"
-        ? isDefaulted({ ...t, status: "pendente" })
-          ? "Marcado como inadimplente. Consulte a aba Inadimplentes."
-          : "Marcado como pendente; aparecerá em Inadimplentes após o vencimento."
-        : t.status === "pago" ? "Marcado como pendente" : "Baixa registrada");
+      toast.success(
+        t.kind === "entrada" && t.payment_method === "boleto" && t.status === "pago"
+          ? isDefaulted({ ...t, status: "pendente" })
+            ? "Marcado como inadimplente. Consulte a aba Inadimplentes."
+            : "Marcado como pendente; aparecerá em Inadimplentes após o vencimento."
+          : t.status === "pago"
+            ? "Marcado como pendente"
+            : "Baixa registrada",
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
     }
   }
 
   async function del(t: Txn) {
-    const all = t.group_id && t.installment_total > 1 ? confirm("Excluir todas as parcelas deste lançamento? (Cancelar = só esta)") : false;
+    const all =
+      t.group_id && t.installment_total > 1
+        ? confirm("Excluir todas as parcelas deste lançamento? (Cancelar = só esta)")
+        : false;
     if (!all && !confirm("Excluir este lançamento?")) return;
     try {
       await remove.mutateAsync({ id: t.id, groupId: all ? t.group_id : null });
@@ -44,16 +60,22 @@ export function TxnTable({ rows, showFee = false, dateField = "due_date" }: { ro
   return (
     <div className="surface-card overflow-x-auto">
       {editing && <EditTxnDialog txn={editing} onClose={() => setEditing(null)} />}
-      <table className="finance-table w-full min-w-[760px] text-sm" aria-label="Lançamentos financeiros">
-        <caption className="sr-only">Valores, vencimentos e ações dos lançamentos financeiros</caption>
+      <table
+        className="finance-table w-full min-w-[640px] text-sm"
+        aria-label="Lançamentos financeiros"
+      >
+        <caption className="sr-only">
+          Valores, vencimentos e ações dos lançamentos financeiros
+        </caption>
         <thead>
           <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-            <th className="px-4 py-3 font-medium">{dateField === "due_date" ? "Vencimento" : "Data"}</th>
+            <th className="px-4 py-3 font-medium">
+              {dateField === "due_date" ? "Vencimento" : "Data"}
+            </th>
             <th className="px-4 py-3 font-medium">Descrição</th>
-            <th className="px-4 py-3 font-medium">Categoria</th>
             <th className="px-4 py-3 font-medium">Forma</th>
             <th className="px-4 py-3 font-medium">Status</th>
-            {showFee && <th className="px-4 py-3 text-right font-medium">Taxa</th>}
+            {hasFees && <th className="px-4 py-3 text-right font-medium">Taxa</th>}
             <th className="px-4 py-3 text-right font-medium">Valor</th>
             <th className="px-2 py-3" />
           </tr>
@@ -61,11 +83,21 @@ export function TxnTable({ rows, showFee = false, dateField = "due_date" }: { ro
         <tbody>
           {rows.map((t) => (
             <tr key={t.id} className="border-b border-border/60 last:border-0 hover:bg-muted/50">
-              <td data-label={dateField === "due_date" ? "Vencimento" : "Competência"} className="tabular whitespace-nowrap px-4 py-3">{formatDate(t[dateField])}</td>
+              <td
+                data-label={dateField === "due_date" ? "Vencimento" : "Competência"}
+                className="tabular whitespace-nowrap px-4 py-3"
+              >
+                {formatDate(t[dateField])}
+              </td>
               <td data-label="Descrição" className="px-4 py-3">
                 <div className="flex items-center gap-2">
                   <KindBadge kind={t.kind} />
-                  <span className="font-medium">{t.description}</span>
+                  <span
+                    className="font-medium"
+                    title={t.category_id ? `Categoria: ${catName(t.category_id)}` : undefined}
+                  >
+                    {t.description}
+                  </span>
                   {t.installment_total > 1 && (
                     <span className="tabular text-xs text-muted-foreground">
                       {t.installment_number}/{t.installment_total}
@@ -74,38 +106,74 @@ export function TxnTable({ rows, showFee = false, dateField = "due_date" }: { ro
                 </div>
                 {t.person && <div className="mt-0.5 text-xs text-muted-foreground">{t.person}</div>}
               </td>
-              <td data-label="Categoria" className="px-4 py-3 text-muted-foreground">
-                {catName(t.category_id)}
-                {t.nature && <span className="ml-1 text-xs">({t.nature === "fixa" ? "fixa" : "variável"})</span>}
+              <td data-label="Forma" className="px-4 py-3 text-muted-foreground">
+                {PAYMENT_LABELS[t.payment_method]}
               </td>
-              <td data-label="Forma" className="px-4 py-3 text-muted-foreground">{PAYMENT_LABELS[t.payment_method]}</td>
               <td data-label="Situação" className="px-4 py-3">
                 <StatusBadge t={t} />
               </td>
-              {showFee && (
-                <td data-label="Taxa" className="tabular px-4 py-3 text-right text-muted-foreground">
-                  {t.fee_amount > 0 ? `− ${t.fee_amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"}
+              {hasFees && (
+                <td
+                  data-label="Taxa"
+                  className="tabular px-4 py-3 text-right text-muted-foreground"
+                >
+                  {t.fee_amount > 0
+                    ? `− ${t.fee_amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                    : "—"}
                 </td>
               )}
               <td data-label="Valor" className="px-4 py-3 text-right">
                 <Money value={t.kind === "entrada" ? t.net_amount : t.gross_amount} kind={t.kind} />
               </td>
               <td data-label="Ações" className="whitespace-nowrap px-2 py-3 text-right">
-                {canUse(access, "editar") && !readPayroll(t) && <Button variant="ghost" size="icon" aria-label="Editar lançamento" title="Editar lançamento" onClick={() => setEditing(t)}><Pencil /></Button>}
-                {canUse(access, "baixar") && <Button
-                  variant="ghost"
-                  size={t.kind === "entrada" && t.payment_method === "boleto" && t.status === "pago" ? "sm" : "icon"}
-                  aria-label={t.kind === "entrada" && t.payment_method === "boleto" && t.status === "pago" ? "Marcar boleto como não recebido" : t.status === "pago" ? "Desfazer baixa" : "Dar baixa"}
-                  title={t.status === "pago" ? "Desfazer baixa" : "Dar baixa (pago/recebido)"}
-                  disabled={setPaid.isPending}
-                  onClick={() => toggle(t)}
-                >
-                  {t.status === "pago" ? <Undo2 /> : <Check className="text-income" />}
-                  {t.kind === "entrada" && t.payment_method === "boleto" && t.status === "pago" && "Não recebido"}
-                </Button>}
-                {canUse(access, "excluir") && <Button variant="ghost" size="icon" aria-label="Excluir" title="Excluir" onClick={() => del(t)}>
-                  <Trash2 className="text-muted-foreground" />
-                </Button>}
+                {canUse(access, "editar") && !readPayroll(t) && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Editar lançamento"
+                    title="Editar lançamento"
+                    onClick={() => setEditing(t)}
+                  >
+                    <Pencil />
+                  </Button>
+                )}
+                {canUse(access, "baixar") && (
+                  <Button
+                    variant="ghost"
+                    size={
+                      t.kind === "entrada" && t.payment_method === "boleto" && t.status === "pago"
+                        ? "sm"
+                        : "icon"
+                    }
+                    aria-label={
+                      t.kind === "entrada" && t.payment_method === "boleto" && t.status === "pago"
+                        ? "Marcar boleto como não recebido"
+                        : t.status === "pago"
+                          ? "Desfazer baixa"
+                          : "Dar baixa"
+                    }
+                    title={t.status === "pago" ? "Desfazer baixa" : "Dar baixa (pago/recebido)"}
+                    disabled={setPaid.isPending}
+                    onClick={() => toggle(t)}
+                  >
+                    {t.status === "pago" ? <Undo2 /> : <Check className="text-income" />}
+                    {t.kind === "entrada" &&
+                      t.payment_method === "boleto" &&
+                      t.status === "pago" &&
+                      "Não recebido"}
+                  </Button>
+                )}
+                {canUse(access, "excluir") && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Excluir"
+                    title="Excluir"
+                    onClick={() => del(t)}
+                  >
+                    <Trash2 className="text-muted-foreground" />
+                  </Button>
+                )}
               </td>
             </tr>
           ))}
@@ -114,4 +182,3 @@ export function TxnTable({ rows, showFee = false, dateField = "due_date" }: { ro
     </div>
   );
 }
-
