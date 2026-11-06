@@ -4,7 +4,6 @@ import {
   AlertCircle,
   AlertTriangle,
   ArrowDownRight,
-  ArrowUpRight,
   CalendarClock,
   CheckCircle2,
   ChevronRight,
@@ -21,7 +20,6 @@ import {
   dashboardMonth,
   defaultedReceivables,
   formatBRL,
-  formatDate,
   formatMonth,
   futureReceivables,
   monthBilling,
@@ -498,4 +496,3 @@ export function CostsPanel({
   );
 }
 
-export { formatDate, ArrowUpRight };
