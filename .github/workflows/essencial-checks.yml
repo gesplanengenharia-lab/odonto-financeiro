@@ -29,3 +29,8 @@ jobs:
         run: pnpm exec tsc --noEmit
       - name: Executar testes
         run: pnpm test
+      - name: Validar migrações em PostgreSQL isolado
+        run: |
+          npm install --prefix "$RUNNER_TEMP/essencial-db-test" --no-save --ignore-scripts --no-audit --no-fund @electric-sql/pglite@0.5.15
+          PGLITE_MODULE="$RUNNER_TEMP/essencial-db-test/node_modules/@electric-sql/pglite" node scripts/verify-treasury-migration.cjs
+

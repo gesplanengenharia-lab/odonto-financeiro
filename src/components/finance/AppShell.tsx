@@ -56,7 +56,10 @@ export function AppShell() {
   useEffect(() => {
     if (!userId) return;
     void supabase.rpc("auto_settle_due_entries").then(({ data }) => {
-      if (data && data > 0) void qc.invalidateQueries({ queryKey: ["txns"] });
+      if (data && data > 0) void Promise.all([
+        qc.invalidateQueries({ queryKey: ["txns"] }),
+        qc.invalidateQueries({ queryKey: ["treasury"] }),
+      ]);
     });
   }, [userId, qc]);
 
@@ -149,4 +152,5 @@ export function AppShell() {
     </div>
   );
 }
+
 

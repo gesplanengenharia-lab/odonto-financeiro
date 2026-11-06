@@ -13,7 +13,7 @@ import { pageHead } from "@/lib/head";
 import { formatBRL } from "@/lib/finance";
 import { myAccessQuery } from "@/lib/queries";
 import {
-  accountsQuery, movementsQuery, reconciliationsQuery, accountBalancesQuery,
+  accountsQuery, movementsQuery, reconciliationsQuery, accountBalancesQuery, treasuryReadyQuery,
   addTreasuryAccount, addTreasuryMovement, addBankReconciliation,
   type FinancialAccount, type NewAccount, type NewMovement, type NewReconciliation,
 } from "@/lib/treasury-api";
@@ -48,13 +48,16 @@ function Tesouraria() {
   const { data: access, isPending: checkingAccess } = useQuery(myAccessQuery());
   const admin = access?.roles.includes("admin") ?? false;
   const qc = useQueryClient();
-  const accounts = useQuery({ ...accountsQuery(), enabled: admin });
-  const movements = useQuery({ ...movementsQuery(), enabled: admin });
-  const reconciliations = useQuery({ ...reconciliationsQuery(), enabled: admin });
+  const readiness = useQuery({ ...treasuryReadyQuery(), enabled: admin });
+  const ready = readiness.data === true;
+  const accounts = useQuery({ ...accountsQuery(), enabled: admin && ready });
+  const movements = useQuery({ ...movementsQuery(), enabled: admin && ready });
+  const reconciliations = useQuery({ ...reconciliationsQuery(), enabled: admin && ready });
   const [asOf, setAsOf] = useState(treasuryTodayISO());
+  const validAsOf = isISODate(asOf) && asOf <= treasuryTodayISO();
   const rows = accounts.data ?? [];
-  const balances = useQuery({ ...accountBalancesQuery(rows, asOf), enabled: admin && rows.length > 0 && isISODate(asOf) });
-  const confirmedBalances = useQuery({ ...accountBalancesQuery(rows, asOf, true), enabled: admin && rows.length > 0 && isISODate(asOf) });
+  const balances = useQuery({ ...accountBalancesQuery(rows, asOf), enabled: admin && ready && rows.length > 0 && validAsOf });
+
   const [mode, setMode] = useState<"contas" | "movimentos" | "conferencias" | "vinculos">("contas");
   const [showCreate, setShowCreate] = useState<"conta" | "movimento" | "conferencia" | null>(null);
 
@@ -71,11 +74,14 @@ function Tesouraria() {
   if (checkingAccess) return <p className="p-6 text-sm text-muted-foreground">Verificando acesso…</p>;
   if (!admin) return <div className="surface-card p-6" role="alert">A Tesouraria é exclusiva para administradores.</div>;
 
+  if (readiness.isPending || readiness.isError) return <QueryFeedback loading={readiness.isPending} error={readiness.isError} retry={() => void readiness.refetch()}><span /></QueryFeedback>;
+  if (!ready) return <div className="surface-card p-6" role="status"><h1 className="text-xl font-semibold">Tesouraria em validação</h1><p className="mt-2 text-sm text-muted-foreground">A atualização de segurança dos saldos ainda precisa ser verificada no banco. As operações da Tesouraria ficam indisponíveis até essa etapa ser concluída.</p><Button className="mt-4" variant="outline" onClick={() => void readiness.refetch()}>Verificar novamente</Button></div>;
+
   const activeAccounts = rows.filter((a) => a.active);
   const total = rows.filter((a) => a.opening_date <= asOf)
-    .reduce((sum, a) => sum + (balances.data?.[a.id] ?? 0), 0);
+    .reduce((sum, a) => sum + (balances.data?.posted[a.id] ?? 0), 0);
   const confirmedTotal = rows.filter((a) => a.opening_date <= asOf)
-    .reduce((sum, a) => sum + (confirmedBalances.data?.[a.id] ?? 0), 0);
+    .reduce((sum, a) => sum + (balances.data?.confirmed[a.id] ?? 0), 0);
   // Treasury capital movements exist in both views; the delta isolates payments without reconciliation.
   const unconfirmedDelta = Math.round((total - confirmedTotal) * 100) / 100;
   return (
@@ -92,11 +98,12 @@ function Tesouraria() {
       </div>
       <div className="mb-5 flex flex-wrap items-end gap-3">
         <FormField label="Posição em"><Input type="date" value={asOf} max={treasuryTodayISO()} onChange={(e) => setAsOf(e.target.value)} /></FormField>
-        <Button variant="outline" onClick={() => { void accounts.refetch(); void balances.refetch(); void confirmedBalances.refetch(); void movements.refetch(); void reconciliations.refetch(); }}>Atualizar posição</Button>
+        <Button variant="outline" disabled={!validAsOf} onClick={() => { void accounts.refetch(); void balances.refetch(); void movements.refetch(); void reconciliations.refetch(); }}>Atualizar posição</Button>
       </div>
-      <QueryFeedback loading={accounts.isPending || (rows.length > 0 && (balances.isPending || confirmedBalances.isPending))}
-        error={accounts.isError || balances.isError || confirmedBalances.isError}
-        retry={() => { void accounts.refetch(); void balances.refetch(); void confirmedBalances.refetch(); }}> 
+      {!validAsOf && <p role="alert" className="mb-4 text-sm text-expense">Informe uma data válida, até hoje, para consultar a posição.</p>}
+      <QueryFeedback loading={validAsOf && (accounts.isPending || (rows.length > 0 && balances.isPending))}
+        error={!validAsOf || accounts.isError || balances.isError}
+        retry={() => { if (validAsOf) { void accounts.refetch(); void balances.refetch(); } }}> 
         {rows.length === 0 ? (
           <EmptyState title="Nenhuma conta cadastrada">Cadastre uma conta com o saldo e a data de abertura reais. Não crie saldos fictícios para compensar lançamentos antigos.</EmptyState>
         ) : (
@@ -123,9 +130,9 @@ function Tesouraria() {
               <h2 className="mt-3 font-semibold">{account.name}</h2>
               <p className="text-xs text-muted-foreground">{account.kind === "caixa" ? "Caixa físico" : "Conta bancária"} · Abertura {account.opening_date.split("-").reverse().join("/")}</p>
               <p className="mt-4 font-display text-2xl font-semibold tabular-nums">
-                {account.opening_date > asOf ? "Ainda não aberta" : balances.isError || confirmedBalances.isError ? "Indisponível" : balances.data?.[account.id] === undefined ? "Calculando…" : formatBRL(balances.data?.[account.id] ?? 0)}
+                {!validAsOf ? "Data inválida" : account.opening_date > asOf ? "Ainda não aberta" : balances.isError ? "Indisponível" : balances.data?.posted[account.id] === undefined ? "Calculando…" : formatBRL(balances.data?.posted[account.id] ?? 0)}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">Saldo com baixas conciliadas: {account.opening_date > asOf ? "—" : confirmedBalances.data?.[account.id] === undefined ? "Calculando…" : formatBRL(confirmedBalances.data?.[account.id] ?? 0)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Saldo com baixas conciliadas: {!validAsOf ? "—" : account.opening_date > asOf ? "—" : balances.isError ? "Indisponível" : balances.data?.confirmed[account.id] === undefined ? "Calculando…" : formatBRL(balances.data?.confirmed[account.id] ?? 0)}</p>
               <p className="mt-1 text-xs text-muted-foreground">Saldo inicial: {formatBRL(account.opening_balance)}</p>
             </div>
           ))}
@@ -255,3 +262,4 @@ function ReconciliationForm({ accounts, busy, save, close }: { accounts: Financi
     <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={close}>Cancelar</Button><Button type="submit" disabled={busy}>{busy ? "Conferindo…" : "Registrar conferência"}</Button></div>
   </form>;
 }
+

@@ -56,3 +56,15 @@ SELECT
  count(*) FILTER (WHERE status = 'pago' AND financial_account_id IS NOT NULL AND reconciled_at IS NOT NULL) AS conciliados,
  count(*) FILTER (WHERE kind = 'entrada' AND status = 'pago' AND auto_settle) AS entradas_baixadas_com_auto_settle_habilitado
 FROM public.transactions;
+
+-- Verificação complementar: executar após a liberação do limite de consultas.
+-- Esta consulta não foi executada na auditoria de 05/11/2026: o conector
+-- informou que o limite do plano foi atingido. Não presumir resultado zero.
+SELECT
+ count(*) FILTER (WHERE status = 'pago' AND paid_date IS NULL) AS baixas_sem_data,
+ count(*) FILTER (WHERE status = 'pago' AND paid_date > (now() AT TIME ZONE 'America/Sao_Paulo')::date) AS baixas_futuras,
+ count(*) FILTER (WHERE gross_amount::text = 'NaN' OR net_amount::text = 'NaN' OR fee_amount::text = 'NaN'
+   OR gross_amount < 0 OR fee_amount < 0 OR net_amount < 0
+   OR abs(net_amount - (gross_amount - fee_amount)) > 0.005) AS valores_a_revisar
+FROM public.transactions;
+

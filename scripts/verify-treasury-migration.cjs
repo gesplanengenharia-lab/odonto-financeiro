@@ -8,6 +8,8 @@ const assert = require('node:assert/strict');
 const { PGlite } = require(process.env.PGLITE_MODULE || '@electric-sql/pglite');
 (async () => {
  const db = new PGlite();
+ // Align CURRENT_DATE in synthetic fixtures with the production financial calendar.
+ await db.exec(`SET TIME ZONE 'America/Sao_Paulo'`);
  await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
  CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY, email text, raw_user_meta_data jsonb DEFAULT '{}');
  CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
@@ -97,6 +99,40 @@ const { PGlite } = require(process.env.PGLITE_MODULE || '@electric-sql/pglite');
    const result=results.at(-1).rows[0];
    check(Number(result.versao_instalada)===1 && Number(result.tabelas_protegidas)===5 && Number(result.campos_novos)===3 && Number(result.gatilhos_auditoria)===7,'Delivered SQL and final verification query execute correctly');
  }
+ const v2 = fs.readFileSync(path.join(root,'0006_treasury_atomic_balances.sql'),'utf8');
+ const beforeV2 = await db.query('SELECT to_jsonb(t) AS data FROM public.transactions t ORDER BY id');
+ await fail(v2.replace('INSERT INTO public.financial_schema_versions(version) VALUES (2);', "RAISE EXCEPTION 'rollback v2';"),'V2 installation rolls back atomically on failure');
+ check(await scalar("SELECT to_regprocedure('public.treasury_balances_snapshot(date,uuid[])') IS NULL AS v"),'Failed v2 leaves no partial RPC');
+ await db.exec(v2); await db.exec(v2);
+ check(await scalar('SELECT count(*)::int AS v FROM public.financial_schema_versions WHERE version=2')===1,'V2 reapplication is idempotent');
+ check(JSON.stringify((await db.query('SELECT to_jsonb(t) AS data FROM public.transactions t ORDER BY id')).rows)===JSON.stringify(beforeV2.rows),'V2 never rewrites financial records');
+ await role('authenticated',admin);
+ for (const patch of ["person='Synthetic patient'", "description='Changed synthetic reference'", 'due_date=current_date-4']) {
+   await db.exec(`UPDATE public.transactions SET ${patch} WHERE id='${legacy.id}'`);
+   check(await scalar(`SELECT reconciled_at IS NULL AND reconciled_by IS NULL AS v FROM public.transactions WHERE id='${legacy.id}'`),'Editing reconciled identity invalidates old statement confirmation');
+   await db.exec(`SELECT public.set_transaction_reconciliation('${legacy.id}','${a}',current_date-5,true)`);
+ }
+ const balances = async (ids='NULL') => (await db.query(`SELECT public.treasury_balances_snapshot((now() AT TIME ZONE 'America/Sao_Paulo')::date,${ids}) AS data`)).rows[0].data;
+ let combined = await balances();
+ check(Number(combined.find(r=>r.id===a).posted)===1324 && Number(combined.find(r=>r.id===a).confirmed)===1324,'Snapshot contains both posted and confirmed views');
+ check(Number(combined.find(r=>r.id===b).posted)===500,'Snapshot includes every selected account');
+ await db.exec(`INSERT INTO public.treasury_movements(kind,account_id,destination_account_id,movement_date,amount,description) VALUES ('transferencia','${a}','${b}',current_date,25,'Atomic snapshot transfer')`);
+ combined = await balances();
+ check(Number(combined.find(r=>r.id===a).posted)===1299 && Number(combined.find(r=>r.id===b).posted)===525,'Both transfer legs appear in the same statement');
+ check(combined.reduce((sum,r)=>sum+Number(r.posted),0)===1824,'Transfer preserves consolidated capital');
+ check((await balances(`ARRAY['${a}'::uuid]`)).length===1,'Account subset is respected');
+ const future=(await db.query("INSERT INTO public.financial_accounts(name,kind,opening_date,opening_balance) VALUES ('Future account','banco',current_date+1,99) RETURNING id")).rows[0].id;
+ const notOpen=(await balances()).find(r=>r.id===future);
+ check(notOpen.posted===null && notOpen.confirmed===null,'Account before opening has no invented zero');
+ await fail('SELECT public.treasury_balances_snapshot(NULL)','Missing position date rejected');
+ await fail('SELECT public.treasury_balances_snapshot(current_date+1)','Future cash position rejected');
+ await role('authenticated',member);
+ await fail('SELECT public.treasury_balances_snapshot(current_date)','Member cannot use snapshot RPC');
+ await role('anon','');
+ await fail('SELECT public.treasury_balances_snapshot(current_date)','Anonymous cannot use snapshot RPC');
+ await db.exec('RESET ROLE');
+ check(await scalar("SELECT NOT prosecdef AND provolatile='s' AS v FROM pg_proc WHERE oid='public.treasury_balances_snapshot(date,uuid[])'::regprocedure"),'Snapshot is stable and security invoker');
  console.log(JSON.stringify({checks,postgres:(await db.query('SELECT version() AS v')).rows[0].v,result:'passed',database:'isolated PGlite only; production untouched'}));
  await db.close();
 })().catch(error=>{console.error(error);process.exit(1);});
+
