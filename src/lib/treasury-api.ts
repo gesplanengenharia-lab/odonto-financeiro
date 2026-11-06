@@ -116,16 +116,20 @@ export const reconciliationsQuery = () => queryOptions({
     return all;
   },
 });
-export const accountBalancesQuery = (accounts: FinancialAccount[], asOf: string) => queryOptions({
-  queryKey: ["treasury", "balances", asOf, accounts.map((a) => a.id).join(",")],
+export const accountBalancesQuery = (accounts: FinancialAccount[], asOf: string, confirmedOnly = false) => queryOptions({
+  queryKey: ["treasury", "balances", confirmedOnly ? "conciliados" : "registrados", asOf, accounts.map((a) => a.id).join(",")],
   enabled: accounts.length > 0,
   queryFn: async () => {
     const pairs = await Promise.all(accounts.filter((a) => a.opening_date <= asOf).map(async (a) => {
       const { data, error } = await treasuryDb.rpc("financial_account_balance", {
-        _account_id: a.id, _as_of: asOf, _confirmed_only: false,
+        _account_id: a.id, _as_of: asOf, _confirmed_only: confirmedOnly,
       });
       if (error) throw error;
-      return [a.id, Number(data)] as const;
+      const amount = Number(data);
+      if (data === null || !Number.isFinite(amount)) {
+        throw new Error("O banco retornou saldo inválido para a conta " + a.name + ".");
+      }
+      return [a.id, amount] as const;
     }));
     return Object.fromEntries(pairs) as Record<string, number>;
   },
