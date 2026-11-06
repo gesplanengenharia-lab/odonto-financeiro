@@ -8,12 +8,11 @@ Base auditada: `3aed7350ef767d3eeca25ebd0053597841747c64`.
 ## Banco original: confirmado por consultas de leitura
 
 Projeto Lovable: `60585b0d-f363-536a-b06e-3c59acaccdb0`, banco habilitado,
-PostgreSQL 17.11. Nenhuma escrita, migração ou importação executada na produção.
-Nenhuma conta, baixa, confirmação ou movimentação real foi criada por esta auditoria.
+PostgreSQL 17.11. A auditoria de dados foi somente leitura. Depois da auditoria, a migração aditiva 0006 foi aplicada ao banco original com autorização do usuário; ela alterou apenas a estrutura e o marcador de versão. Nenhuma transação, conta, baixa, confirmação ou movimentação foi criada ou reescrita.
 
 | Verificação | Resultado observado |
 | --- | --- |
-| Versão da Tesouraria | 1 |
+| Versão da Tesouraria | 1 na auditoria inicial; 2 após aplicação da migração aditiva 0006 |
 | Lançamentos | 838 |
 | Baixas sem conta | 328 |
 | Baixas vinculadas / conciliadas | 0 / 0 |
@@ -57,9 +56,7 @@ A consulta complementar de integridade também foi executada manualmente no SQL 
   Tesouraria. Banco v1 apresenta aviso de validação pendente. Outros módulos
   continuam com suas permissões existentes.
 
-**A migração 0006 foi gerada pelo Drizzle e testada somente em banco isolado.**
-Não foi aplicada ao banco original. Ela não modifica valores históricos,
-não preenche contas em lançamentos antigos e não cria transações.
+**A migração 0006 foi gerada pelo Drizzle, testada em banco isolado e aplicada ao banco original.** A verificação posterior confirmou PostgreSQL 17.11, versão 2, função presente, `SECURITY INVOKER`, `STABLE`, execução concedida a `authenticated` e negada a `anon`. As funções privadas de gatilho seguem sem `EXECUTE` para usuários autenticados. Os 838 lançamentos e as contagens zero de contas, movimentos, conferências e auditoria foram preservados. A chamada administrativa somente de leitura retornou `[]`, como esperado sem contas cadastradas. A migração não preencheu contas em lançamentos antigos nem criou transações.
 
 ## Verificações executadas
 
@@ -81,13 +78,10 @@ não comprova a integração autenticada da prévia Lovable com o banco real.
 
 ## Condições antes de mesclar ou publicar
 
-1. Aplicar a migração aditiva 0006 em uma etapa específica de atualização do banco;
-   confirmar versão, função, grants e invalidação de conciliação.
-2. Validar o fluxo autenticado com administrador e a negativa de acesso de um
-   membro. Testes de escrita devem usar ambiente isolado com a mesma estrutura,
-   nunca criar contas ou transações fictícias no banco da clínica.
-3. Conferir sincronização e prévia autenticada. O CI do commit da branch já passou.
+1. Validar o fluxo da interface na prévia Lovable conectada à branch, com usuário
+   administrador. O banco não possui membros cadastrados para testar a negativa
+   de acesso com uma conta real; essa regra foi conferida no RLS e em ambiente
+   PostgreSQL isolado. Não criar lançamentos fictícios na clínica.
+2. Confirmar sincronização da branch e CI do commit mais recente.
 
-O Lovable informou `latest_commit_sha=b22af582dde542332928f879600ac8572a2b13af`,
-correspondente à main. A branch de desenvolvimento não foi mesclada nem publicada.
-Manter o PR como rascunho enquanto as etapas acima estiverem pendentes.
+No momento da auditoria, o Lovable estava sincronizado com `main` em `b22af582dde542332928f879600ac8572a2b13af`. A migração 0006 já está instalada no banco original, mas a interface ainda não foi mesclada nem publicada. Manter o PR como rascunho até a validação da prévia autenticada.
