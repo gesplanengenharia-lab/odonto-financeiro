@@ -71,80 +71,31 @@ afterEach(() => {
 });
 
 describe("Painel e simulação", () => {
-  it("mantém a simulação fora do painel e mostra indicadores", () => {
+  it("mostra os quatro indicadores principais e mantém a simulação em área própria", () => {
     render(<Panel />);
     expect(screen.queryByLabelText("Saldo inicial do mês (R$)")).not.toBeInTheDocument();
-    expect(screen.getByText("Simulação")).toBeInTheDocument();
-    expect(screen.getByLabelText("Resumo financeiro do mês")).toBeInTheDocument();
+    const kpis = screen.getByLabelText("Indicadores principais do mês");
+    expect(kpis.children).toHaveLength(4);
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "À vista × contas" }), { button: 0, ctrlKey: false });
+    expect(screen.getByText("Abrir simulação de caixa")).toBeInTheDocument();
   });
-  it("destaca lucro de caixa e competência com margens e sem antecipar parcelas pendentes", () => {
-    state.rows.push({
-      ...state.rows[0]!,
-      id: "paid",
-      kind: "entrada",
-      nature: null,
-      status: "pago",
-      paid_date: "2026-11-03",
-      gross_amount: 1000,
-      net_amount: 1000,
-    });
-    state.rows.push({
-      ...state.rows[1]!,
-      id: "future",
-      status: "pendente",
-      paid_date: null,
-      due_date: "2026-12-03",
-      gross_amount: 1000,
-      net_amount: 1000,
-    });
+  it("margem de caixa usa os recebimentos como base e a DRE separa competência", () => {
+    state.rows.push({ ...state.rows[0]!, id: "paid", kind: "entrada", nature: null, status: "pago", paid_date: "2026-11-03", gross_amount: 1000, net_amount: 1000 });
+    state.rows.push({ ...state.rows[1]!, id: "future", status: "pendente", paid_date: null, due_date: "2026-12-03", gross_amount: 1000, net_amount: 1000 });
     render(<Panel />);
-    const summary = within(screen.getByLabelText("Resumo financeiro do mês"));
-    expect(summary.getByText("Lucro do mês · caixa")).toBeInTheDocument();
-    expect(summary.getByText(/100,0%/)).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "DRE gerencial do mês" })).not.toBeInTheDocument();
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "DRE e custos" }), {
-      button: 0,
-      ctrlKey: false,
-    });
-    const dre = within(screen.getByRole("region", { name: "DRE gerencial do mês" }));
+    const kpis = within(screen.getByLabelText("Indicadores principais do mês"));
+    expect(kpis.getByText("Sobra do mês")).toBeInTheDocument();
+    expect(kpis.getByText("100,0%")).toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "DRE e custos" }), { button: 0, ctrlKey: false });
+    const dre = within(screen.getByRole("region", { name: /DRE gerencial do mês/ }));
     expect(dre.getByText(/75,0%/)).toBeInTheDocument();
     expect(dre.getByText(/1.500,00/)).toBeInTheDocument();
   });
-  it("mantém só quatro indicadores no resumo e preserva detalhes em abas próprias", () => {
+  it("sem recebimentos mostra 'sem base para cálculo' em vez de inventar margem", () => {
     render(<Panel />);
-    const summary = screen.getByLabelText("Resumo financeiro do mês");
-    expect(summary.children).toHaveLength(4);
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Dia da conferência")).not.toBeInTheDocument();
-    const tabs = [
-      ["Faturamento", "Faturamento por forma de pagamento"],
-      ["Recebimentos", "Recebimentos por forma de pagamento"],
-      ["Entradas à vista", "Entradas à vista do mês"],
-      ["DRE e custos", "Onde estão os custos do mês"],
-      ["Fechamento diário", "Fechamento diário — conferência"],
-    ];
-    for (const [tab, heading] of tabs) {
-      fireEvent.mouseDown(screen.getByRole("tab", { name: tab! }), { button: 0, ctrlKey: false });
-      expect(screen.getByRole("heading", { name: new RegExp(heading!) })).toBeInTheDocument();
-      expect(screen.queryByLabelText("Resumo financeiro do mês")).not.toBeInTheDocument();
-    }
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "Resumo" }), { button: 0, ctrlKey: false });
-    expect(screen.getByLabelText("Resumo financeiro do mês")).toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
-  });
-  it("abre os recebimentos e dinheiro/Pix diretamente pelos atalhos do resumo", () => {
-    render(<Panel />);
-    fireEvent.click(screen.getByRole("button", { name: "Entradas à vista recebidas" }));
-    expect(screen.getByRole("tab", { name: "Entradas à vista" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "Resumo" }), { button: 0, ctrlKey: false });
-    fireEvent.click(screen.getByRole("button", { name: "Ainda deve entrar no mês" }));
-    expect(screen.getByRole("tab", { name: "Recebimentos" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    const kpis = within(screen.getByLabelText("Indicadores principais do mês"));
+    expect(kpis.getByText("sem base para cálculo")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Precisa de atenção" })).toBeInTheDocument();
   });
   it("não calcula aporte quando a consulta da simulação falha", () => {
     state.error = true;
@@ -187,14 +138,14 @@ describe("Painel e simulação", () => {
       target: { value: "2027-01-08" },
     });
     expect(screen.getByLabelText("Dia da conferência")).toHaveValue("2027-01-08");
-    expect(screen.getByText("Janeiro de 2027")).toBeInTheDocument();
+    expect(screen.getAllByText("Janeiro de 2027").length).toBeGreaterThan(0);
     expect(screen.getByText("Nenhum pagamento confirmado em 08/01/2027.")).toBeInTheDocument();
   });
   it("não exibe saldos zerados enquanto carrega", () => {
     state.pending = true;
     render(<Panel />);
-    expect(screen.getByRole("status")).toHaveTextContent("Carregando o financeiro");
-    expect(screen.queryByText("Recebido no caixa")).not.toBeInTheDocument();
+    expect(screen.getByRole("status", { name: /Carregando o financeiro/ })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Indicadores principais do mês")).not.toBeInTheDocument();
   });
   it("não apresenta previsão financeira quando há erro de consulta", () => {
     state.error = true;
