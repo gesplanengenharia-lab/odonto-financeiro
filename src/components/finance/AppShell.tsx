@@ -38,7 +38,7 @@ const NAV_GROUPS = [
       { to: "/lancamentos", label: "Entradas e saídas", icon: ArrowLeftRight },
       { to: "/contas", label: "Pagar e receber", icon: CalendarClock },
       { to: "/colaboradores", label: "Equipe", icon: Users },
-      { to: "/relatorios", label: "Relatórios", icon: BarChart3 },
+      { to: "/relatorios", label: "Gestão", icon: BarChart3 },
     ],
   },
   {
@@ -138,6 +138,16 @@ export function AppShell() {
     );
   }
 
+  const visibleItem = (to: string) =>
+    canUse(access, to.slice(1)) &&
+    !(["/cartoes", "/boletos", "/inadimplentes"].includes(to) && canUse(access, "contas")) &&
+    !(["/provisao", "/simulacao"].includes(to) && canUse(access, "relatorios"));
+  const matchesSearch = (item: { to: string; label: string }) =>
+    `${item.label}${item.to === "/contas" ? " cartões boletos atrasados a receber" : ""}`
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase("pt-BR")
+      .includes(normalizedSearch);
   const initials = (access.name || "?")
     .split(/\s+/)
     .filter(Boolean)
@@ -193,30 +203,14 @@ export function AppShell() {
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-3 pb-4">
         {normalizedSearch &&
           !NAV_GROUPS.some((group) =>
-            group.items.some(
-              (item) =>
-                canUse(access, item.to.slice(1)) &&
-                item.label
-                  .normalize("NFD")
-                  .replace(/[\u0300-\u036f]/g, "")
-                  .toLocaleLowerCase("pt-BR")
-                  .includes(normalizedSearch),
-            ),
+            group.items.some((item) => visibleItem(item.to) && matchesSearch(item)),
           ) && (
             <p role="status" className="px-3 text-xs text-muted-foreground">
               Nenhuma função encontrada.
             </p>
           )}
         {NAV_GROUPS.map((group) => {
-          const items = group.items.filter(
-            (item) =>
-              canUse(access, item.to.slice(1)) &&
-              item.label
-                .normalize("NFD")
-                .replace(/[\u0300-\u036f]/g, "")
-                .toLocaleLowerCase("pt-BR")
-                .includes(normalizedSearch),
-          );
+          const items = group.items.filter((item) => visibleItem(item.to) && matchesSearch(item));
           if (!items.length) return null;
           return (
             <details

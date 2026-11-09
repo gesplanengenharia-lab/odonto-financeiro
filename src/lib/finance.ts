@@ -1,6 +1,8 @@
 // Pure finance rules for the clinic. No I/O here so it can be tested.
 
 export type AccountFilters = {
+  channel?: "cartoes" | "boletos" | "pacientes" | undefined;
+  status?: "pendente" | "pago" | "todos" | undefined;
   kind?: Kind | undefined;
   month?: string | undefined;
   period?: "todos" | "atrasados" | "7" | "30" | undefined;
@@ -10,6 +12,18 @@ export type AccountFilters = {
 /** URL filters contain no patient names and reject invalid or unrelated values. */
 export function accountFilters(search: Record<string, unknown>): AccountFilters {
   const filters: AccountFilters = {};
+  if (
+    search["channel"] === "cartoes" ||
+    search["channel"] === "boletos" ||
+    search["channel"] === "pacientes"
+  )
+    filters.channel = search["channel"];
+  if (
+    search["status"] === "pendente" ||
+    search["status"] === "pago" ||
+    search["status"] === "todos"
+  )
+    filters.status = search["status"];
   if (search["kind"] === "entrada" || search["kind"] === "saida") filters.kind = search["kind"];
   if (typeof search["month"] === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(search["month"]))
     filters.month = search["month"];
@@ -35,7 +49,20 @@ export function openAccounts(
   const needle = normalize(search.trim());
   const rows = txns
     .filter((t) => {
-      if (t.status !== "pendente" || t.kind !== (filters.kind ?? "saida")) return false;
+      if (t.kind !== (filters.kind ?? "saida")) return false;
+      if (filters.status !== "todos" && t.status !== (filters.status ?? "pendente")) return false;
+      if (
+        filters.channel === "cartoes" &&
+        t.payment_method !== "credito" &&
+        t.payment_method !== "debito"
+      )
+        return false;
+      if (filters.channel === "boletos" && t.payment_method !== "boleto") return false;
+      if (
+        filters.channel === "pacientes" &&
+        (t.payment_method === "credito" || t.payment_method === "debito")
+      )
+        return false;
       if (filters.month && monthKey(t.due_date) !== filters.month) return false;
       if (filters.method && t.payment_method !== filters.method) return false;
       if (needle && !normalize(`${t.person ?? ""} ${t.description}`).includes(needle)) return false;
@@ -51,7 +78,11 @@ export function openAccounts(
     rows,
     total: sum(rows),
     overdue: sum(rows.filter((t) => isOverdue(t, today))),
-    nextWeek: sum(rows.filter((t) => t.due_date >= today && t.due_date <= addDays(today, 7))),
+    nextWeek: sum(
+      rows.filter(
+        (t) => t.status === "pendente" && t.due_date >= today && t.due_date <= addDays(today, 7),
+      ),
+    ),
   };
 }
 

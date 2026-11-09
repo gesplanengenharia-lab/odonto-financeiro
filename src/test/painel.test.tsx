@@ -1,3 +1,4 @@
+import { ManagementDetails } from "@/components/finance/ManagementDetails";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComponentType, ReactNode } from "react";
@@ -77,7 +78,7 @@ describe("Painel e simulação", () => {
     const kpis = screen.getByLabelText("Indicadores principais do mês");
     expect(kpis.children).toHaveLength(4);
     expect(screen.queryByRole("tab")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText("Ver análises e fechamento diário"));
+    render(<ManagementDetails />);
     fireEvent.mouseDown(screen.getByRole("tab", { name: "À vista × contas" }), {
       button: 0,
       ctrlKey: false,
@@ -108,7 +109,7 @@ describe("Painel e simulação", () => {
     const kpis = within(screen.getByLabelText("Indicadores principais do mês"));
     expect(kpis.getByText("Sobra do mês")).toBeInTheDocument();
     expect(kpis.getByText("100,0%")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Ver análises e fechamento diário"));
+    render(<ManagementDetails />);
     fireEvent.mouseDown(screen.getByRole("tab", { name: "DRE e custos" }), {
       button: 0,
       ctrlKey: false,
@@ -132,14 +133,14 @@ describe("Painel e simulação", () => {
     expect(
       screen.queryByRole("table", { name: "Evolução financeira dos últimos seis meses" }),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText("Ver análises e fechamento diário"));
+    render(<ManagementDetails />);
     expect(
       screen.getByRole("table", { name: "Evolução financeira dos últimos seis meses" }),
     ).toBeInTheDocument();
   });
   it("abre previsão de 90 dias, exige saldo válido e permite cenário sem alterar lançamentos", () => {
     render(<Panel />);
-    fireEvent.click(screen.getByText("Ver análises e fechamento diário"));
+    render(<ManagementDetails />);
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Caixa 90 dias" }), {
       button: 0,
       ctrlKey: false,
@@ -190,7 +191,7 @@ describe("Painel e simulação", () => {
   });
   it("mantém a conferência diária alinhada ao mês e permite escolher outra data", () => {
     render(<Panel />);
-    fireEvent.click(screen.getByText("Ver análises e fechamento diário"));
+    render(<ManagementDetails />);
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Fechamento diário" }), {
       button: 0,
       ctrlKey: false,
@@ -205,15 +206,13 @@ describe("Painel e simulação", () => {
     expect(screen.getAllByText("Janeiro de 2027").length).toBeGreaterThan(0);
     expect(screen.getByText("Nenhum pagamento confirmado em 08/01/2027.")).toBeInTheDocument();
   });
-  it("abre DRE e fechamento pelos atalhos sem perder o período", () => {
+  it("mantém o painel enxuto e concentra os detalhes na gestão", () => {
     render(<Panel />);
-    fireEvent.click(screen.getByRole("button", { name: /DRE e custos Entenda/ }));
-    expect(screen.getByRole("region", { name: /DRE gerencial do mês/ })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "DRE e custos" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    fireEvent.click(screen.getByRole("button", { name: /Fechamento diário Confira/ }));
+    expect(
+      screen.getByText("Abrir gestão · crescimento, resultado e previsão"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+    render(<ManagementDetails initialTab="diario" />);
     expect(screen.getByLabelText("Dia da conferência")).toHaveValue("2026-11-04");
   });
   it("não exibe saldos zerados enquanto carrega", () => {

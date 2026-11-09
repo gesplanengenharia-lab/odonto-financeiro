@@ -13,7 +13,7 @@ import {
 } from "@/lib/finance";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { pendingQuery } from "@/lib/queries";
+import { txnsByDueQuery } from "@/lib/queries";
 import { NativeSelect } from "@/components/finance/LaunchDialog";
 import { TxnTable } from "@/components/finance/TxnTable";
 import { EmptyState, PageHeader, StatCard } from "@/components/finance/ui";
@@ -33,7 +33,7 @@ function Contas() {
   const tab = filters.kind ?? "saida";
   const period = filters.period ?? "todos";
   const method = filters.method ?? "";
-  const query = useQuery(pendingQuery());
+  const query = useQuery(txnsByDueQuery());
   const { data = [], isLoading } = query;
   const today = todayISO();
   const scope = openAccounts(data, filters, today, search);
@@ -48,7 +48,7 @@ function Contas() {
         subtitle={
           filters.month
             ? `Vencimentos de ${formatMonth(filters.month, true)} · ${tab === "entrada" ? "a receber" : "a pagar"}`
-            : "Contas em aberto, organizadas pelo vencimento"
+            : "Contas organizadas pelo vencimento"
         }
       />
       <QueryFeedback
@@ -58,7 +58,9 @@ function Contas() {
       >
         <Tabs
           value={tab}
-          onValueChange={(v) => update({ kind: v as "entrada" | "saida" })}
+          onValueChange={(v) =>
+            update({ kind: v as "entrada" | "saida", channel: undefined, method: undefined })
+          }
           className="mb-4"
         >
           <TabsList>
@@ -67,6 +69,47 @@ function Contas() {
           </TabsList>
         </Tabs>
 
+        {tab === "entrada" && (
+          <div className="mb-4 flex flex-wrap gap-2" aria-label="Tipos de recebíveis">
+            {(
+              [
+                ["todos", "Todos"],
+                ["cartoes", "Cartões"],
+                ["boletos", "Boletos"],
+                ["atrasados", "Atrasados"],
+              ] as const
+            ).map(([key, label]) => (
+              <Button
+                key={key}
+                size="sm"
+                variant={
+                  (
+                    key === "atrasados"
+                      ? period === "atrasados"
+                      : period !== "atrasados" && (filters.channel ?? "todos") === key
+                  )
+                    ? "default"
+                    : "outline"
+                }
+                onClick={() =>
+                  update({
+                    channel:
+                      key === "cartoes" || key === "boletos"
+                        ? key
+                        : key === "atrasados"
+                          ? "pacientes"
+                          : undefined,
+                    method: undefined,
+                    period: key === "atrasados" ? "atrasados" : "todos",
+                    status: key === "atrasados" ? "pendente" : filters.status,
+                  })
+                }
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+        )}
         <div className="mb-4 grid gap-4 sm:grid-cols-3">
           <StatCard label="Atrasado" value={scope.overdue} tone="expense" />
           <StatCard label="Próximos 7 dias" value={scope.nextWeek} tone="warning" />
@@ -95,6 +138,18 @@ function Contas() {
             />
           </label>
           <NativeSelect
+            aria-label="Situação das contas"
+            className="w-48"
+            value={filters.status ?? "pendente"}
+            onChange={(event) =>
+              update({ status: event.target.value as AccountFilters["status"], period: "todos" })
+            }
+          >
+            <option value="pendente">Em aberto</option>
+            <option value="pago">{tab === "entrada" ? "Recebidos" : "Pagos"}</option>
+            <option value="todos">Todas as situações</option>
+          </NativeSelect>
+          <NativeSelect
             aria-label="Filtrar vencimentos"
             className="w-48"
             value={period}
@@ -120,12 +175,23 @@ function Contas() {
               </option>
             ))}
           </NativeSelect>
-          {(filters.month || filters.method || period !== "todos" || search) && (
+          {(filters.month ||
+            filters.method ||
+            filters.channel ||
+            filters.status ||
+            period !== "todos" ||
+            search) && (
             <Button
               variant="ghost"
               onClick={() => {
                 setSearch("");
-                update({ month: undefined, method: undefined, period: undefined });
+                update({
+                  month: undefined,
+                  method: undefined,
+                  period: undefined,
+                  channel: undefined,
+                  status: undefined,
+                });
               }}
             >
               Limpar filtros
@@ -138,13 +204,14 @@ function Contas() {
         </p>
         {tab === "entrada" && (
           <p className="mb-3 text-xs text-muted-foreground">
-            Inclui recebíveis de cartão. A agenda detalhada de repasses continua em Cartões.
+            Cartões, boletos e demais recebíveis reunidos. O mês selecionado é o do vencimento,
+            inclusive para parcelas recebidas.
           </p>
         )}
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Carregando…</p>
         ) : rows.length === 0 ? (
-          <EmptyState title="Nenhuma conta pendente aqui" />
+          <EmptyState title="Nenhuma conta com estes filtros" />
         ) : (
           <TxnTable rows={rows} />
         )}

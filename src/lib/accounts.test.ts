@@ -79,6 +79,29 @@ describe("caminho do painel às contas", () => {
     expect(list.nextWeek).toBe(200);
     expect(list.total).toBe(200);
   });
+  it("consulta recebidos e atrasados sem misturar repasses de cartão com inadimplência do paciente", () => {
+    const rows = [
+      txn({ id: "late", due_date: "2026-11-01" }),
+      txn({ id: "late-card", due_date: "2026-11-01", payment_method: "credito" }),
+      txn({ id: "paid", status: "pago", paid_date: "2026-11-01" }),
+    ];
+    expect(
+      openAccounts(rows, { kind: "entrada", channel: "cartoes" }, "2026-11-09").rows.map(
+        (row) => row.id,
+      ),
+    ).toEqual(["late-card"]);
+    expect(
+      openAccounts(
+        rows,
+        { kind: "entrada", channel: "pacientes", period: "atrasados" },
+        "2026-11-09",
+      ).total,
+    ).toBe(100);
+    const received = openAccounts(rows, { kind: "entrada", status: "pago" }, "2026-11-09");
+    expect(received.rows).toHaveLength(1);
+    expect(received.nextWeek).toBe(0);
+    expect(received.overdue).toBe(0);
+  });
   it("descarta filtros inválidos e nunca leva nomes de pacientes para o endereço", () => {
     expect(
       accountFilters({

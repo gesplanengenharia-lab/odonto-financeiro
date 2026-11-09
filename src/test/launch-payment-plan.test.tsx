@@ -104,6 +104,7 @@ describe("novo lançamento com entrada e saldo", () => {
   it("repete o valor mensal sem dividi-lo e bloqueia duplo envio", async () => {
     open();
     fireEvent.click(screen.getByRole("button", { name: "Saída (despesa)" }));
+    fireEvent.click(screen.getByLabelText("Repetir despesa mensalmente"));
     fireEvent.change(screen.getByLabelText("Despesa recorrente"), { target: { value: "3" } });
     expect(screen.queryByLabelText("Parcelas mensais")).not.toBeInTheDocument();
     let finish!: () => void;
@@ -124,6 +125,17 @@ describe("novo lançamento com entrada e saldo", () => {
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "Salvar" })).not.toBeInTheDocument(),
     );
+  });
+  it("começa simples e limpa parcelas ao voltar ao pagamento único", async () => {
+    open();
+    expect(screen.queryByLabelText("Parcelas mensais")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Dividir em parcelas"));
+    fireEvent.change(screen.getByLabelText("Parcelas mensais"), { target: { value: "3" } });
+    fireEvent.click(screen.getByLabelText("Dividir em parcelas"));
+    expect(screen.queryByLabelText("Parcelas mensais")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(state.create).toHaveBeenCalledOnce());
+    expect(state.create.mock.calls[0]![0]).toHaveLength(1);
   });
   it("mantém despesa simples sem pagamento com entrada ou repetição", () => {
     open();

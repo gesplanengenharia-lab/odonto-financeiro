@@ -99,6 +99,8 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
   const [entryPaid, setEntryPaid] = useState(true);
   const [paid, setPaid] = useState(true);
   const savingRef = useRef(false);
+  const [parcelEnabled, setParcelEnabled] = useState(false);
+  const [recurring, setRecurring] = useState(false);
   const [repeatMonths, setRepeatMonths] = useState(1);
   const [notes, setNotes] = useState("");
 
@@ -214,6 +216,9 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
               setCategoryId("");
               setHasEntry(false);
               setRepeatMonths(1);
+              setParcelEnabled(false);
+              setRecurring(false);
+              setInstallments(1);
               setPaid(true);
             }}
             className={cn(
@@ -306,6 +311,8 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
               checked={hasEntry}
               onChange={(e) => {
                 setHasEntry(e.target.checked);
+                setInstallments(1);
+                setParcelEnabled(false);
                 setPaid(!e.target.checked);
                 if (e.target.checked) {
                   setEntryDue(date);
@@ -391,6 +398,7 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
               setMethod(e.target.value as PaymentMethod);
               setInstallments(1);
               setRepeatMonths(1);
+              setRecurring(false);
             }}
           >
             {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((m) => (
@@ -401,6 +409,34 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
           </NativeSelect>
         </div>
         {kind === "saida" && (
+          <label className="flex items-center gap-2 text-sm sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={recurring}
+              onChange={(event) => {
+                setRecurring(event.target.checked);
+                setRepeatMonths(1);
+                setInstallments(1);
+                setParcelEnabled(false);
+              }}
+            />
+            Repetir despesa mensalmente
+          </label>
+        )}
+        {!withEntry && !isCard && !recurring && (
+          <label className="flex items-center gap-2 text-sm sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={parcelEnabled}
+              onChange={(event) => {
+                setParcelEnabled(event.target.checked);
+                setInstallments(1);
+              }}
+            />
+            Dividir em parcelas
+          </label>
+        )}
+        {kind === "saida" && recurring && (
           <div className="grid gap-1.5 sm:col-span-2">
             <Label htmlFor="repeat-months">Despesa recorrente</Label>
             <NativeSelect
@@ -424,28 +460,32 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
             </p>
           </div>
         )}
-        {method !== "debito" && repeatMonths === 1 && (
-          <div className="grid gap-1.5">
-            <Label htmlFor="inst">
-              {withEntry
-                ? "Parcelas do restante"
-                : method === "credito"
-                  ? "Parcelas no cartão"
-                  : "Parcelas mensais"}
-            </Label>
-            <NativeSelect
-              id="inst"
-              value={installments}
-              onChange={(e) => setInstallments(Number(e.target.value))}
-            >
-              {Array.from({ length: method === "credito" ? 12 : 24 }, (_, i) => i + 1).map((n) => (
-                <option key={n} value={n}>
-                  {n === 1 ? (withEntry ? "Parcela única" : "À vista") : `${n}x`}
-                </option>
-              ))}
-            </NativeSelect>
-          </div>
-        )}
+        {method !== "debito" &&
+          !recurring &&
+          (parcelEnabled || withEntry || method === "credito") && (
+            <div className="grid gap-1.5">
+              <Label htmlFor="inst">
+                {withEntry
+                  ? "Parcelas do restante"
+                  : method === "credito"
+                    ? "Parcelas no cartão"
+                    : "Parcelas mensais"}
+              </Label>
+              <NativeSelect
+                id="inst"
+                value={installments}
+                onChange={(e) => setInstallments(Number(e.target.value))}
+              >
+                {Array.from({ length: method === "credito" ? 12 : 24 }, (_, i) => i + 1).map(
+                  (n) => (
+                    <option key={n} value={n}>
+                      {n === 1 ? (withEntry ? "Parcela única" : "À vista") : `${n}x`}
+                    </option>
+                  ),
+                )}
+              </NativeSelect>
+            </div>
+          )}
         {!isCard && (
           <div className="grid gap-1.5">
             <Label htmlFor="due">
@@ -486,10 +526,18 @@ function LaunchForm({ defaultKind, onDone }: { defaultKind: Kind; onDone: () => 
             desfaça a baixa em Lançamentos para ele aparecer em Inadimplentes.
           </p>
         )}
-        <div className="grid gap-1.5 sm:col-span-2">
-          <Label htmlFor="notes">Observações</Label>
-          <Textarea id="notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </div>
+        <details className="sm:col-span-2 text-sm">
+          <summary className="cursor-pointer text-muted-foreground">Observações opcionais</summary>
+          <div className="mt-2 grid gap-1.5">
+            <Label htmlFor="notes">Observações</Label>
+            <Textarea
+              id="notes"
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
+        </details>
       </div>
 
       {plan.error && (
