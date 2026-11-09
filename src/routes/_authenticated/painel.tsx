@@ -1,67 +1,13 @@
-import { GrowthPanel } from "@/components/finance/GrowthPanel";
-import { Forecast90Panel } from "@/components/finance/Forecast90Panel";
 import { useFinancialMonth } from "@/hooks/use-financial-month";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Calculator,
-  RefreshCw,
-  ArrowUpRight,
-  BarChart3,
-  Receipt,
-  CalendarCheck,
-} from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { pageHead } from "@/lib/head";
-import {
-  addMonths,
-  cashMargin,
-  cashPixMonth,
-  cashValue,
-  dashboardAlerts,
-  dashboardCosts,
-  dashboardDay,
-  dashboardIndicators,
-  dashboardMonth,
-  defaultedReceivables,
-  formatBRL,
-  formatDate,
-  formatMonth,
-  formatPct,
-  monthBilling,
-  managementComparison,
-  monthKey,
-  monthRange,
-  nextMonths,
-  PAYMENT_LABELS,
-  receiptComposition,
-  summarize,
-  todayISO,
-  addDays,
-} from "@/lib/finance";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BillingTab, CashPixTab } from "@/components/finance/PainelTabs";
-import {
-  AlertsPanel,
-  CompositionPanel,
-  CostsPanel,
-  DefaultPanel,
-  KpiStrip,
-} from "@/components/finance/PainelResumo";
-import { categoriesQuery, txnsByCompetenceQuery, txnsByDueQuery } from "@/lib/queries";
-
-import {
-  EmptyState,
-  KindBadge,
-  MonthPicker,
-  Money,
-  Pct,
-  PeriodTag,
-  StatCard,
-} from "@/components/finance/ui";
+import { formatBRL, formatDate, formatMonth, monthKey, todayISO } from "@/lib/finance";
+import { overviewQuery } from "@/lib/performance-queries";
+import { AlertsPanel, CompositionPanel, KpiStrip } from "@/components/finance/PainelResumo";
+import { MonthPicker, PeriodTag } from "@/components/finance/ui";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_authenticated/painel")({
@@ -77,18 +23,9 @@ function Painel() {
   const today = todayISO();
   const currentMonth = monthKey(today);
   const [month, setMonth] = useFinancialMonth();
-  const { start, end } = monthRange(month);
-  const cashQuery = useQuery(txnsByDueQuery());
-  const compQuery = useQuery(txnsByCompetenceQuery(start, end));
-  const cash = cashQuery.data ?? [];
-  const comp = compQuery.data ?? [];
-  const m = dashboardMonth(cash, month, today);
-  const billing = monthBilling(comp, month);
-  const composition = receiptComposition(cash, month);
-  const margin = cashMargin(m.realized, m.received);
-  const comparison = managementComparison(cash, month, today);
-  const defaulted = defaultedReceivables(cash, month, false, today);
-  const alerts = dashboardAlerts(cash, today);
+  const query = useQuery(overviewQuery(month));
+  const snapshot = query.data;
+  const m = snapshot?.cash;
   const periodNote =
     month === currentMonth
       ? "Mês atual · valores realizados até hoje"
@@ -118,7 +55,7 @@ function Painel() {
         </div>
       </header>
 
-      {cashQuery.isPending || compQuery.isPending ? (
+      {query.isPending ? (
         <div
           className="space-y-6"
           role="status"
@@ -131,7 +68,7 @@ function Painel() {
           </div>
           <span className="sr-only">Carregando…</span>
         </div>
-      ) : cashQuery.isError || compQuery.isError ? (
+      ) : query.isError || !snapshot || !m ? (
         <div className="surface-card p-6" role="alert">
           <p className="font-semibold text-expense">Não foi possível carregar o painel.</p>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -142,8 +79,7 @@ function Painel() {
             className="mt-3 gap-2"
             variant="outline"
             onClick={() => {
-              void cashQuery.refetch();
-              void compQuery.refetch();
+              void query.refetch();
             }}
           >
             <RefreshCw className="h-4 w-4" /> Tentar novamente
@@ -153,23 +89,34 @@ function Painel() {
         <>
           <KpiStrip
             month={month}
-            billing={billing}
+            billing={snapshot.billing}
             cash={m}
-            composition={composition}
-            margin={margin}
-            comparison={comparison}
+            composition={snapshot.composition}
+            margin={snapshot.margin}
+            comparison={snapshot.comparison}
           />
 
-          {!comparison.future && (
+          {!snapshot.comparison.future && (
             <p className="text-xs text-muted-foreground" aria-label="Período da comparação">
-              Comparação: {formatDate(comparison.start)} a {formatDate(comparison.end)} contra{" "}
-              {formatDate(comparison.previousStart)} a {formatDate(comparison.previousEnd)}
-              {comparison.partial
+              Comparação: {formatDate(snapshot.comparison.start)} a{" "}
+              {formatDate(snapshot.comparison.end)} contra{" "}
+              {formatDate(snapshot.comparison.previousStart)} a{" "}
+              {formatDate(snapshot.comparison.previousEnd)}
+              {snapshot.comparison.partial
                 ? " · mesmos dias do mês anterior, limitado ao último dia existente."
                 : " · meses completos."}
             </p>
           )}
 
+          {snapshot.noExpenses && (
+            <p
+              role="status"
+              className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm"
+            >
+              Nenhuma despesa por competência foi registrada neste mês. Confira os lançamentos antes
+              de interpretar a margem como desempenho da clínica.
+            </p>
+          )}
           {m.missingPaidDates > 0 && (
             <p className="text-xs text-warning">
               {m.missingPaidDates} lançamento(s) pago(s) neste mês sem data de pagamento: o
@@ -207,13 +154,15 @@ function Painel() {
               className="rounded-lg px-3 py-2 hover:bg-muted"
             >
               <p className="text-sm text-muted-foreground">Pacientes em atraso</p>
-              <p className="tabular mt-1 text-xl font-semibold">{formatBRL(defaulted.total)}</p>
+              <p className="tabular mt-1 text-xl font-semibold">
+                {formatBRL(snapshot.overduePatients)}
+              </p>
               <p className="mt-1 text-xs text-muted-foreground">Todos os meses · até ontem</p>
             </Link>
           </section>
           <div className="grid items-start gap-5 xl:grid-cols-[1.5fr_1fr]">
-            <CompositionPanel month={month} data={composition} />
-            <AlertsPanel alerts={alerts} />
+            <CompositionPanel month={month} data={snapshot.composition} />
+            <AlertsPanel alerts={snapshot.alerts} />
           </div>
           <div className="flex flex-wrap gap-3 border-t border-border pt-4">
             <Button asChild variant="outline">

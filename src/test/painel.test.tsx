@@ -1,26 +1,43 @@
+import { Forecast90Panel } from "@/components/finance/Forecast90Panel";
 import { ManagementDetails } from "@/components/finance/ManagementDetails";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComponentType, ReactNode } from "react";
+import { overviewSnapshot } from "@/lib/overview";
 import type { Txn } from "@/lib/finance";
 
-const state = vi.hoisted(() => ({ rows: [] as Txn[], pending: false, error: false }));
+const state = vi.hoisted(() => ({
+  rows: [] as Txn[],
+  pending: false,
+  error: false,
+  queries: [] as { kind?: string; enabled?: boolean; from?: string }[],
+}));
 vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => (options: { component: ComponentType }) => ({ options }),
   Link: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 vi.mock("@tanstack/react-query", () => ({
-  useQuery: () => ({
-    data: state.rows,
-    isPending: state.pending,
-    isError: state.error,
-    refetch: vi.fn(),
-  }),
+  useQuery: (options?: { kind: string; month: string; enabled?: boolean; from?: string }) => {
+    state.queries.push(options ?? {});
+    return {
+      data:
+        options?.kind === "overview"
+          ? overviewSnapshot(state.rows, options.month, "2026-11-04")
+          : state.rows,
+      isPending: state.pending,
+      isError: state.error,
+      refetch: vi.fn(),
+    };
+  },
+}));
+vi.mock("@/lib/performance-queries", () => ({
+  overviewQuery: (month: string) => ({ kind: "overview", month }),
+  analysisRowsQuery: () => ({ kind: "analysis" }),
 }));
 vi.mock("@/lib/queries", () => ({
   txnsByDueQuery: vi.fn(),
-  txnsByCompetenceQuery: vi.fn(),
-  categoriesQuery: vi.fn(),
+  txnsByCompetenceQuery: (from: string) => ({ kind: "competence", from }),
+  categoriesQuery: () => ({ kind: "categories" }),
 }));
 vi.mock("@/components/finance/LaunchDialog", () => ({ LaunchDialog: () => null }));
 vi.mock("recharts", () => ({
@@ -41,6 +58,7 @@ const Simulation = SimulationRoute.options.component as ComponentType;
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date(2026, 10, 4, 12));
+  state.queries = [];
   state.pending = false;
   state.error = false;
   state.rows = [
@@ -72,20 +90,24 @@ afterEach(() => {
 });
 
 describe("Painel e simulação", () => {
-  it("mostra os quatro indicadores principais e mantém a simulação em área própria", () => {
+  it("mostra os quatro indicadores principais e mantém a simulação em área própria", async () => {
     render(<Panel />);
     expect(screen.queryByLabelText("Saldo inicial do mês (R$)")).not.toBeInTheDocument();
     const kpis = screen.getByLabelText("Indicadores principais do mês");
     expect(kpis.children).toHaveLength(4);
     expect(screen.queryByRole("tab")).not.toBeInTheDocument();
-    render(<ManagementDetails />);
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "À vista × contas" }), {
-      button: 0,
-      ctrlKey: false,
+    await act(async () => {
+      render(<ManagementDetails />);
+    });
+    await act(async () => {
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Recebimentos e contas" }), {
+        button: 0,
+        ctrlKey: false,
+      });
     });
     expect(screen.getByText("Abrir simulação de caixa")).toBeInTheDocument();
   });
-  it("margem de caixa usa os recebimentos e mantém a DRE nos detalhes", () => {
+  it("margem de caixa usa os recebimentos e mantém a DRE nos detalhes", async () => {
     state.rows.push({
       ...state.rows[0]!,
       id: "paid",
@@ -109,22 +131,26 @@ describe("Painel e simulação", () => {
     const kpis = within(screen.getByLabelText("Indicadores principais do mês"));
     expect(kpis.getByText("Sobra do mês")).toBeInTheDocument();
     expect(kpis.getByText("100,0%")).toBeInTheDocument();
-    render(<ManagementDetails />);
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "DRE e custos" }), {
-      button: 0,
-      ctrlKey: false,
+    await act(async () => {
+      render(<ManagementDetails />);
+    });
+    await act(async () => {
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "DRE e custos" }), {
+        button: 0,
+        ctrlKey: false,
+      });
     });
     const dre = within(screen.getByRole("region", { name: /DRE gerencial do mês/ }));
     expect(dre.getByText(/75,0%/)).toBeInTheDocument();
     expect(dre.getByText(/1.500,00/)).toBeInTheDocument();
   });
-  it("sem recebimentos mostra 'sem base para cálculo' em vez de inventar margem", () => {
+  it("sem recebimentos mostra 'sem base para cálculo' em vez de inventar margem", async () => {
     render(<Panel />);
     const kpis = within(screen.getByLabelText("Indicadores principais do mês"));
     expect(kpis.getByText("sem base para cálculo")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Precisa de atenção" })).toBeInTheDocument();
   });
-  it("mostra crescimento nos detalhes sem acrescentar cartões na tela inicial", () => {
+  it("mostra crescimento nos detalhes sem acrescentar cartões na tela inicial", async () => {
     render(<Panel />);
     expect(screen.getByLabelText("Indicadores principais do mês").children).toHaveLength(4);
     expect(screen.getByLabelText("Período da comparação")).toHaveTextContent(
@@ -133,18 +159,15 @@ describe("Painel e simulação", () => {
     expect(
       screen.queryByRole("table", { name: "Evolução financeira dos últimos seis meses" }),
     ).not.toBeInTheDocument();
-    render(<ManagementDetails />);
+    await act(async () => {
+      render(<ManagementDetails />);
+    });
     expect(
       screen.getByRole("table", { name: "Evolução financeira dos últimos seis meses" }),
     ).toBeInTheDocument();
   });
-  it("abre previsão de 90 dias, exige saldo válido e permite cenário sem alterar lançamentos", () => {
-    render(<Panel />);
-    render(<ManagementDetails />);
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "Caixa 90 dias" }), {
-      button: 0,
-      ctrlKey: false,
-    });
+  it("abre previsão de 90 dias, exige saldo válido e permite cenário sem alterar lançamentos", async () => {
+    render(<Forecast90Panel rows={state.rows} today="2026-11-04" />);
     const region = within(
       screen.getByRole("region", { name: "Vai faltar dinheiro nos próximos 90 dias?" }),
     );
@@ -161,14 +184,14 @@ describe("Painel e simulação", () => {
     });
     expect(region.getByRole("alert")).toHaveTextContent("Informe um valor");
   });
-  it("não calcula aporte quando a consulta da simulação falha", () => {
+  it("não calcula aporte quando a consulta da simulação falha", async () => {
     state.error = true;
     render(<Simulation />);
     expect(screen.getByRole("alert")).toHaveTextContent("Não foi possível carregar a simulação");
     expect(screen.queryByLabelText("Saldo inicial do mês (R$)")).not.toBeInTheDocument();
   });
 
-  it("só calcula aporte com saldo válido e preserva simulações separadas por mês", () => {
+  it("só calcula aporte com saldo válido e preserva simulações separadas por mês", async () => {
     render(<Simulation />);
     expect(screen.getByText("Informe o saldo inicial para calcular o aporte")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Saldo inicial do mês (R$)"), {
@@ -189,12 +212,16 @@ describe("Painel e simulação", () => {
       "true",
     );
   });
-  it("mantém a conferência diária alinhada ao mês e permite escolher outra data", () => {
+  it("mantém a conferência diária alinhada ao mês e permite escolher outra data", async () => {
     render(<Panel />);
-    render(<ManagementDetails />);
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "Fechamento diário" }), {
-      button: 0,
-      ctrlKey: false,
+    await act(async () => {
+      render(<ManagementDetails />);
+    });
+    await act(async () => {
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Fechamento diário" }), {
+        button: 0,
+        ctrlKey: false,
+      });
     });
     expect(screen.getByLabelText("Dia da conferência")).toHaveValue("2026-11-04");
     fireEvent.click(screen.getByRole("button", { name: "Próximo mês" }));
@@ -206,25 +233,42 @@ describe("Painel e simulação", () => {
     expect(screen.getAllByText("Janeiro de 2027").length).toBeGreaterThan(0);
     expect(screen.getByText("Nenhum pagamento confirmado em 08/01/2027.")).toBeInTheDocument();
   });
-  it("mantém o painel enxuto e concentra os detalhes na gestão", () => {
+  it("mantém o painel enxuto e concentra os detalhes na gestão", async () => {
     render(<Panel />);
     expect(
       screen.getByText("Abrir gestão · crescimento, resultado e previsão"),
     ).toBeInTheDocument();
     expect(screen.queryByRole("tab")).not.toBeInTheDocument();
-    render(<ManagementDetails initialTab="diario" />);
+    await act(async () => {
+      render(<ManagementDetails initialTab="diario" />);
+    });
     expect(screen.getByLabelText("Dia da conferência")).toHaveValue("2026-11-04");
   });
-  it("não exibe saldos zerados enquanto carrega", () => {
+  it("não exibe saldos zerados enquanto carrega", async () => {
     state.pending = true;
     render(<Panel />);
     expect(screen.getByRole("status", { name: /Carregando o financeiro/ })).toBeInTheDocument();
     expect(screen.queryByLabelText("Indicadores principais do mês")).not.toBeInTheDocument();
   });
-  it("não apresenta previsão financeira quando há erro de consulta", () => {
+  it("não apresenta previsão financeira quando há erro de consulta", async () => {
     state.error = true;
     render(<Panel />);
     expect(screen.getByRole("alert")).toHaveTextContent("Não foi possível carregar o painel");
     expect(screen.queryByLabelText("Resumo financeiro do mês")).not.toBeInTheDocument();
   });
+});
+
+it("carrega somente o histórico necessário à análise ativa", async () => {
+  await act(async () => {
+    render(<ManagementDetails initialTab="evolucao" />);
+  });
+  expect(state.queries.filter((q) => q.enabled !== false).map((q) => q.kind)).toEqual(["analysis"]);
+  cleanup();
+  state.queries = [];
+  await act(async () => {
+    render(<ManagementDetails initialTab="faturamento" />);
+  });
+  const active = state.queries.filter((q) => q.enabled !== false);
+  expect(active.map((q) => q.kind)).toEqual(["competence"]);
+  expect(active[0]?.from).toBe("2026-06-01");
 });

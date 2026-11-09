@@ -3,14 +3,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { pageHead } from "@/lib/head";
-import {
-  dashboardFunding,
-  dashboardMonth,
-  formatBRL,
-  formatMonth,
-  todayISO,
-} from "@/lib/finance";
-import { txnsByDueQuery } from "@/lib/queries";
+import { dashboardFunding, dashboardMonth, formatBRL, formatMonth, todayISO } from "@/lib/finance";
+import { analysisRowsQuery } from "@/lib/performance-queries";
 import { MonthPicker, PageHeader } from "@/components/finance/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +19,7 @@ function Simulacao() {
   const today = todayISO();
   const [month, setMonth] = useFinancialMonth();
   const [openings, setOpenings] = useState<Record<string, string>>({});
-  const cashQuery = useQuery(txnsByDueQuery());
+  const cashQuery = useQuery(analysisRowsQuery("formas", month, today, today));
   const m = dashboardMonth(cashQuery.data ?? [], month, today);
   const opening = openings[month] ?? "";
   const openingValue = Number(opening.replace(/\./g, "").replace(",", "."));
