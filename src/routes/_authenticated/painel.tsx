@@ -228,14 +228,22 @@ function Painel() {
             aria-label="Pendências do mês"
             className="grid divide-y divide-border rounded-xl border border-border bg-card px-2 py-2 sm:grid-cols-3 sm:divide-x sm:divide-y-0"
           >
-            <Link to="/contas" className="rounded-lg px-3 py-2 hover:bg-muted">
+            <Link
+              to="/contas"
+              search={{ kind: "entrada", month }}
+              className="rounded-lg px-3 py-2 hover:bg-muted"
+            >
               <p className="text-sm text-muted-foreground">A receber no mês</p>
               <p className="tabular mt-1 text-xl font-semibold">
                 {formatBRL(m.toReceive + m.overdueReceivable)}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">Inclui vencidos deste mês</p>
             </Link>
-            <Link to="/contas" className="rounded-lg px-3 py-2 hover:bg-muted">
+            <Link
+              to="/contas"
+              search={{ kind: "saida", month }}
+              className="rounded-lg px-3 py-2 hover:bg-muted"
+            >
               <p className="text-sm text-muted-foreground">A pagar no mês</p>
               <p className="tabular mt-1 text-xl font-semibold">{formatBRL(m.toPay)}</p>
               <p className="mt-1 text-xs text-muted-foreground">Contas ainda em aberto</p>

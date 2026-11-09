@@ -332,6 +332,11 @@ export function AlertsPanel({ alerts }: { alerts: ReturnType<typeof dashboardAle
               <li key={a.id}>
                 <Link
                   to={a.to}
+                  search={
+                    a.to === "/contas"
+                      ? { kind: "saida", period: a.id === "bills_week" ? "7" : "atrasados" }
+                      : {}
+                  }
                   className="flex items-start gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted"
                 >
                   <span

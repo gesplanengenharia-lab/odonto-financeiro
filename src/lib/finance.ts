@@ -1,5 +1,60 @@
 // Pure finance rules for the clinic. No I/O here so it can be tested.
 
+export type AccountFilters = {
+  kind?: Kind | undefined;
+  month?: string | undefined;
+  period?: "todos" | "atrasados" | "7" | "30" | undefined;
+  method?: PaymentMethod | undefined;
+};
+
+/** URL filters contain no patient names and reject invalid or unrelated values. */
+export function accountFilters(search: Record<string, unknown>): AccountFilters {
+  const filters: AccountFilters = {};
+  if (search["kind"] === "entrada" || search["kind"] === "saida") filters.kind = search["kind"];
+  if (typeof search["month"] === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(search["month"]))
+    filters.month = search["month"];
+  if (["todos", "atrasados", "7", "30"].includes(String(search["period"])))
+    filters.period = search["period"] as AccountFilters["period"];
+  if (typeof search["method"] === "string" && Object.hasOwn(PAYMENT_LABELS, search["method"]))
+    filters.method = search["method"] as PaymentMethod;
+  return filters;
+}
+
+/** One scope for the visible rows and their totals, including card receivables. */
+export function openAccounts(
+  txns: Txn[],
+  filters: AccountFilters,
+  today = todayISO(),
+  search = "",
+) {
+  const normalize = (value: string) =>
+    value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase("pt-BR");
+  const needle = normalize(search.trim());
+  const rows = txns
+    .filter((t) => {
+      if (t.status !== "pendente" || t.kind !== (filters.kind ?? "saida")) return false;
+      if (filters.month && monthKey(t.due_date) !== filters.month) return false;
+      if (filters.method && t.payment_method !== filters.method) return false;
+      if (needle && !normalize(`${t.person ?? ""} ${t.description}`).includes(needle)) return false;
+      if (filters.period === "atrasados") return isOverdue(t, today);
+      if (filters.period === "7" || filters.period === "30")
+        return t.due_date >= today && t.due_date <= addDays(today, Number(filters.period));
+      return true;
+    })
+    .sort((a, b) => a.due_date.localeCompare(b.due_date) || a.id.localeCompare(b.id));
+  const sum = (list: Txn[]) =>
+    list.reduce((total, row) => total + Math.round(cashValue(row) * 100), 0) / 100;
+  return {
+    rows,
+    total: sum(rows),
+    overdue: sum(rows.filter((t) => isOverdue(t, today))),
+    nextWeek: sum(rows.filter((t) => t.due_date >= today && t.due_date <= addDays(today, 7))),
+  };
+}
+
 /** Compare equivalent calendar periods; never compare a partial month to a full one. */
 export function managementComparison(txns: Txn[], month: string, today = todayISO()) {
   const current = monthRange(month);
