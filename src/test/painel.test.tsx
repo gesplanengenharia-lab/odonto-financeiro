@@ -205,6 +205,17 @@ describe("Painel e simulação", () => {
     expect(screen.getAllByText("Janeiro de 2027").length).toBeGreaterThan(0);
     expect(screen.getByText("Nenhum pagamento confirmado em 08/01/2027.")).toBeInTheDocument();
   });
+  it("abre DRE e fechamento pelos atalhos sem perder o período", () => {
+    render(<Panel />);
+    fireEvent.click(screen.getByRole("button", { name: /DRE e custos Entenda/ }));
+    expect(screen.getByRole("region", { name: /DRE gerencial do mês/ })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "DRE e custos" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Fechamento diário Confira/ }));
+    expect(screen.getByLabelText("Dia da conferência")).toHaveValue("2026-11-04");
+  });
   it("não exibe saldos zerados enquanto carrega", () => {
     state.pending = true;
     render(<Panel />);

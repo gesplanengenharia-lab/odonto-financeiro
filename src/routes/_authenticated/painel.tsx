@@ -3,8 +3,15 @@ import { Forecast90Panel } from "@/components/finance/Forecast90Panel";
 import { useFinancialMonth } from "@/hooks/use-financial-month";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useRef, useState } from "react";
-import { Calculator, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Calculator,
+  RefreshCw,
+  ArrowUpRight,
+  BarChart3,
+  Receipt,
+  CalendarCheck,
+} from "lucide-react";
 import { pageHead } from "@/lib/head";
 import {
   addMonths,
@@ -34,7 +41,13 @@ import {
 } from "@/lib/finance";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BillingTab, CashPixTab } from "@/components/finance/PainelTabs";
-import { AlertsPanel, CostsPanel, DefaultPanel, KpiStrip } from "@/components/finance/PainelResumo";
+import {
+  AlertsPanel,
+  CompositionPanel,
+  CostsPanel,
+  DefaultPanel,
+  KpiStrip,
+} from "@/components/finance/PainelResumo";
 import { categoriesQuery, txnsByCompetenceQuery, txnsByDueQuery } from "@/lib/queries";
 
 import {
@@ -122,11 +135,15 @@ function Painel() {
         : "Mês futuro · apenas previsões";
   const openTab = (value: string) => {
     setTab(value);
-    detailsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setDetailsOpen(true);
   };
 
+  useEffect(() => {
+    if (detailsOpen) detailsRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [detailsOpen, tab]);
+
   return (
-    <div className="space-y-6">
+    <div className="executive-dashboard space-y-6">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
@@ -209,7 +226,7 @@ function Painel() {
 
           <section
             aria-label="Pendências do mês"
-            className="grid gap-4 border-y border-border py-5 sm:grid-cols-3"
+            className="grid divide-y divide-border rounded-xl border border-border bg-card px-2 py-2 sm:grid-cols-3 sm:divide-x sm:divide-y-0"
           >
             <Link to="/contas" className="rounded-lg px-3 py-2 hover:bg-muted">
               <p className="text-sm text-muted-foreground">A receber no mês</p>
@@ -229,32 +246,47 @@ function Painel() {
               <p className="mt-1 text-xs text-muted-foreground">Todos os meses · até ontem</p>
             </Link>
           </section>
-          <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
-            <section className="surface-card p-5" aria-label="Recebimentos do mês por forma">
-              <h2 className="text-base">Como entrou</h2>
-              {composition.rows.filter((row) => row.amount > 0).length === 0 ? (
-                <p className="py-8 text-sm text-muted-foreground">Nenhum recebimento neste mês.</p>
-              ) : (
-                <ul className="mt-3 divide-y divide-border">
-                  {composition.rows
-                    .filter((row) => row.amount > 0)
-                    .map((row) => (
-                      <li
-                        key={row.key}
-                        className="flex items-center justify-between gap-3 py-3 text-sm"
-                      >
-                        <span>{row.label}</span>
-                        <strong className="tabular font-medium">{formatBRL(row.amount)}</strong>
-                      </li>
-                    ))}
-                </ul>
-              )}
-              <p className="mt-3 text-xs text-muted-foreground">
-                Baixas registradas no sistema. Confirmação bancária na Tesouraria.
-              </p>
-            </section>
+          <div className="grid items-start gap-5 xl:grid-cols-[1.5fr_1fr]">
+            <CompositionPanel month={month} data={composition} />
             <AlertsPanel alerts={alerts} />
           </div>
+          <section aria-label="Acessos às análises" className="grid gap-3 sm:grid-cols-3">
+            {[
+              {
+                value: "evolucao",
+                title: "Crescimento",
+                hint: "Compare os últimos seis meses",
+                icon: BarChart3,
+              },
+              {
+                value: "dre",
+                title: "DRE e custos",
+                hint: "Entenda o resultado e as despesas",
+                icon: Receipt,
+              },
+              {
+                value: "diario",
+                title: "Fechamento diário",
+                hint: "Confira entradas e saídas do dia",
+                icon: CalendarCheck,
+              },
+            ].map(({ value, title, hint, icon: Icon }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => openTab(value)}
+                aria-controls="financial-details"
+                className="analysis-shortcut flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-4 text-left transition-colors hover:border-primary/40 hover:bg-accent/30"
+              >
+                <Icon className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">{title}</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">{hint}</span>
+                </span>
+                <ArrowUpRight className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+              </button>
+            ))}
+          </section>
           <div>
             <button
               type="button"

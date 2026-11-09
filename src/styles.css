@@ -238,3 +238,42 @@
     margin-right: auto;
   }
 }
+
+/* Executive overview: one emphasized result, quiet supporting indicators. */
+.executive-kpi {
+  border-top: 3px solid color-mix(in oklch, var(--primary) 30%, var(--border));
+}
+.executive-kpi-featured {
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-top: 3px solid var(--brand);
+  border-radius: var(--radius-xl);
+}
+.executive-kpi-featured .text-foreground,
+.executive-kpi-featured .text-income,
+.executive-kpi-featured .text-expense {
+  color: var(--ink-foreground);
+}
+.executive-kpi-featured .text-muted-foreground,
+.executive-kpi-featured .text-primary {
+  color: var(--ink-muted);
+}
+.executive-kpi-featured .border-border {
+  border-color: color-mix(in oklch, var(--ink-muted) 25%, transparent);
+}
+.executive-dashboard .receipt-composition {
+  min-width: 0;
+}
+@media print {
+  .executive-kpi-featured {
+    background: white;
+    border-color: var(--border);
+  }
+  .executive-kpi-featured .text-foreground,
+  .executive-kpi-featured .text-income,
+  .executive-kpi-featured .text-expense,
+  .executive-kpi-featured .text-muted-foreground,
+  .executive-kpi-featured .text-primary {
+    color: var(--foreground);
+  }
+}

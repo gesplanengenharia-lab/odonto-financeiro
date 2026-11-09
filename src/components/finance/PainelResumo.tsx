@@ -73,7 +73,7 @@ export function KpiStrip({
   return (
     <section
       aria-label="Indicadores principais do mês"
-      className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+      className="grid grid-cols-2 gap-3 xl:grid-cols-4"
     >
       <Kpi
         icon={<Receipt className="h-4 w-4" />}
@@ -107,6 +107,7 @@ export function KpiStrip({
       </Kpi>
       <Kpi
         icon={<TrendingUp className="h-4 w-4" />}
+        featured
         title="Resultado de caixa"
         tag={cash.realized >= 0 ? "Sobra do mês" : "Falta no mês"}
         value={formatBRL(cash.realized)}
@@ -164,7 +165,9 @@ function Kpi({
   value,
   valueClass,
   children,
+  featured = false,
 }: {
+  featured?: boolean;
   icon: ReactNode;
   title: string;
   tag: string;
@@ -173,16 +176,24 @@ function Kpi({
   children: ReactNode;
 }) {
   return (
-    <div className="surface-card flex flex-col gap-3 p-5">
-      <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+    <div
+      className={cn(
+        "executive-kpi flex min-w-0 flex-col gap-3 p-3 sm:p-5",
+        featured ? "executive-kpi-featured" : "surface-card",
+      )}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground sm:text-sm">
           <span className="text-primary">{icon}</span>
           {title}
         </span>
-        <span className="text-[11px] text-muted-foreground">{tag}</span>
+        <span className="hidden text-[11px] text-muted-foreground sm:block">{tag}</span>
       </div>
       <p
-        className={cn("tabular text-[1.85rem] font-bold leading-tight tracking-tight", valueClass)}
+        className={cn(
+          "tabular text-lg font-bold leading-tight tracking-tight sm:text-[1.65rem]",
+          valueClass,
+        )}
       >
         {value}
       </p>
@@ -206,60 +217,54 @@ export function CompositionPanel({
       id="composition-title"
       title="Como o dinheiro entrou"
       tag={<PeriodTag>Caixa · {formatMonth(month, true)} · valores líquidos</PeriodTag>}
-      className="lg:col-span-2"
+      className="receipt-composition"
     >
       {data.total === 0 ? (
         <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-          Nenhum recebimento confirmado neste mês.
+          Nenhum recebimento registrado neste mês.
         </p>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl bg-income-soft px-4 py-3">
-              <p className="text-xs font-semibold text-income">
-                À vista — dinheiro, Pix, débito e boleto à vista
-              </p>
-              <p className="tabular mt-1 text-xl font-bold text-foreground">
-                {formatBRL(data.upfront)}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                <Pct value={data.upfrontPct} /> do recebido · disponível para pagar as contas
-              </p>
+          <div className="rounded-xl border border-primary/15 bg-accent/40 px-5 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+                  Entradas à vista
+                </p>
+                <p className="tabular mt-2 text-[1.75rem] font-bold tracking-tight">
+                  {formatBRL(data.upfront)}
+                </p>
+              </div>
+              <span className="rounded-full bg-card px-3 py-1.5 text-sm font-semibold text-primary">
+                <Pct value={data.upfrontPct} /> do recebido
+              </span>
             </div>
-            <div className="rounded-xl bg-muted px-4 py-3">
-              <p className="text-xs font-semibold text-muted-foreground">
-                Parcelados e outros — crédito, boleto parcelado, cheque
-              </p>
-              <p className="tabular mt-1 text-xl font-bold text-foreground">
-                {formatBRL(data.other)}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                <Pct value={data.otherPct} /> do recebido
-              </p>
-            </div>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              Dinheiro, Pix, débito e boleto à vista · recebimentos registrados no mês.
+            </p>
           </div>
           <ul className="mt-5 space-y-3" aria-label="Recebimentos por forma de pagamento">
             {rows.map((r) => (
               <li
                 key={r.key}
-                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 sm:grid-cols-[11rem_minmax(0,1fr)_auto]"
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2"
               >
                 <span className="flex items-center gap-2 text-sm font-medium">
                   {r.label}
                   {r.upfront && (
-                    <span className="rounded bg-income-soft px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-income">
+                    <span className="hidden rounded bg-income-soft px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-income sm:inline">
                       à vista
                     </span>
                   )}
                 </span>
                 <span
-                  className="order-3 col-span-2 h-2 overflow-hidden rounded-full bg-muted sm:order-none sm:col-span-1"
+                  className="order-3 col-span-2 h-1.5 overflow-hidden rounded-full bg-muted"
                   aria-hidden="true"
                 >
                   <span
                     className={cn(
                       "block h-full rounded-full",
-                      r.upfront ? "bg-income" : "bg-primary/70",
+                      r.upfront ? "bg-income" : "bg-primary/45",
                     )}
                     style={{ width: `${r.percent ?? 0}%` }}
                   />

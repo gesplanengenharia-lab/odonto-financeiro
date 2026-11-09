@@ -18,6 +18,7 @@ import {
   Settings,
   LogOut,
   Menu,
+  Search,
   Plus,
   X,
 } from "lucide-react";
@@ -67,6 +68,12 @@ export function AppShell() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [menuSearch, setMenuSearch] = useState("");
+  const normalizedSearch = menuSearch
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .trim();
   const userId = access?.user?.id;
 
   // Patient receivables settle automatically on their due date (also scheduled daily on the server).
@@ -145,7 +152,10 @@ export function AppShell() {
       <div className="px-6 pb-5 pt-7">
         <Link
           to="/painel"
-          onClick={() => setOpen(false)}
+          onClick={() => {
+            setOpen(false);
+            setMenuSearch("");
+          }}
           aria-label="Essencial Odontologia — ir para o painel"
         >
           <img
@@ -167,15 +177,54 @@ export function AppShell() {
           }
         />
       </div>
+      <label className="relative mx-4 mb-5 block">
+        <Search
+          className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <input
+          aria-label="Buscar função no menu"
+          placeholder="Buscar uma função"
+          value={menuSearch}
+          onChange={(event) => setMenuSearch(event.target.value)}
+          className="h-10 w-full rounded-lg border border-sidebar-border bg-sidebar-accent/40 pl-9 pr-3 text-xs outline-none focus:ring-2 focus:ring-sidebar-ring"
+        />
+      </label>
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-3 pb-4">
+        {normalizedSearch &&
+          !NAV_GROUPS.some((group) =>
+            group.items.some(
+              (item) =>
+                canUse(access, item.to.slice(1)) &&
+                item.label
+                  .normalize("NFD")
+                  .replace(/[\u0300-\u036f]/g, "")
+                  .toLocaleLowerCase("pt-BR")
+                  .includes(normalizedSearch),
+            ),
+          ) && (
+            <p role="status" className="px-3 text-xs text-muted-foreground">
+              Nenhuma função encontrada.
+            </p>
+          )}
         {NAV_GROUPS.map((group) => {
-          const items = group.items.filter((item) => canUse(access, item.to.slice(1)));
+          const items = group.items.filter(
+            (item) =>
+              canUse(access, item.to.slice(1)) &&
+              item.label
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .toLocaleLowerCase("pt-BR")
+                .includes(normalizedSearch),
+          );
           if (!items.length) return null;
           return (
             <details
               key={group.label}
               open={
-                group.label === "Principal" || items.some((item) => item.to === location.pathname)
+                !!normalizedSearch ||
+                group.label === "Principal" ||
+                items.some((item) => item.to === location.pathname)
               }
               className="group"
               aria-label={group.label}
@@ -197,7 +246,10 @@ export function AppShell() {
                   <li key={item.to}>
                     <Link
                       to={item.to}
-                      onClick={() => setOpen(false)}
+                      onClick={() => {
+                        setOpen(false);
+                        setMenuSearch("");
+                      }}
                       className="group relative flex items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
                       activeProps={{
                         className: "bg-sidebar-accent text-sidebar-accent-foreground",
@@ -289,12 +341,21 @@ export function AppShell() {
         </Button>
       </div>
       <div className={cn("fixed inset-0 z-50 lg:hidden", open ? "block" : "hidden")}>
-        <div className="absolute inset-0 bg-foreground/40" onClick={() => setOpen(false)} />
+        <div
+          className="absolute inset-0 bg-foreground/40"
+          onClick={() => {
+            setOpen(false);
+            setMenuSearch("");
+          }}
+        />
         <div className="relative h-full w-[min(18rem,85vw)] shadow-2xl">
           <button
             aria-label="Fechar menu"
             className="absolute right-3 top-4 z-10 text-sidebar-foreground"
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              setOpen(false);
+              setMenuSearch("");
+            }}
           >
             <X className="h-5 w-5" />
           </button>
