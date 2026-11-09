@@ -44,7 +44,12 @@ function MoreLink({
 }) {
   return (
     <Link
-      to={to}
+      to={to === "/inadimplentes" ? "/contas" : to}
+      search={
+        to === "/inadimplentes"
+          ? { kind: "entrada", period: "atrasados", channel: "pacientes" }
+          : {}
+      }
       className="inline-flex items-center gap-0.5 text-sm font-medium text-primary hover:underline"
     >
       {children}
@@ -331,11 +336,15 @@ export function AlertsPanel({ alerts }: { alerts: ReturnType<typeof dashboardAle
             return (
               <li key={a.id}>
                 <Link
-                  to={a.to}
+                  to={a.to === "/inadimplentes" || a.to === "/cartoes" ? "/contas" : a.to}
                   search={
                     a.to === "/contas"
                       ? { kind: "saida", period: a.id === "bills_week" ? "7" : "atrasados" }
-                      : {}
+                      : a.to === "/inadimplentes"
+                        ? { kind: "entrada", period: "atrasados", channel: "pacientes" }
+                        : a.to === "/cartoes"
+                          ? { kind: "entrada", period: "atrasados", channel: "cartoes" }
+                          : {}
                   }
                   className="flex items-start gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted"
                 >
