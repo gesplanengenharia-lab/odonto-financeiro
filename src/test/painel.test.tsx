@@ -56,7 +56,7 @@ import { Route as SimulationRoute } from "@/routes/_authenticated/simulacao";
 const Simulation = SimulationRoute.options.component as ComponentType;
 
 beforeEach(() => {
-  vi.useFakeTimers();
+  vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date(2026, 10, 4, 12));
   state.queries = [];
   state.pending = false;
@@ -105,7 +105,7 @@ describe("Painel e simulação", () => {
         ctrlKey: false,
       });
     });
-    expect(screen.getByText("Abrir simulação de caixa")).toBeInTheDocument();
+    expect(await screen.findByText("Abrir simulação de caixa")).toBeInTheDocument();
   });
   it("margem de caixa usa os recebimentos e mantém a DRE nos detalhes", async () => {
     state.rows.push({
@@ -163,7 +163,7 @@ describe("Painel e simulação", () => {
       render(<ManagementDetails />);
     });
     expect(
-      screen.getByRole("table", { name: "Evolução financeira dos últimos seis meses" }),
+      await screen.findByRole("table", { name: "Evolução financeira dos últimos seis meses" }),
     ).toBeInTheDocument();
   });
   it("abre previsão de 90 dias, exige saldo válido e permite cenário sem alterar lançamentos", async () => {
