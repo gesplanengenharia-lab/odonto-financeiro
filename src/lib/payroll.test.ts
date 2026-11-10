@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { payrollTotal, type Txn } from "./finance";
-import { readPayroll, payrollSchema, nextPayrollMonth } from "./payroll";
+import { readPayroll, payrollSchema, nextPayrollMonth, payrollPaymentDetails } from "./payroll";
 describe("remuneração mensal", () => {
   it("soma salário, adicionais, comissão, bônus, férias e rescisão e desconta uma vez", () => {
     expect(
@@ -71,6 +71,37 @@ it("reaproveita fixos e zera variáveis, férias e rescisão sem alterar o mês 
 });
 
 it("calcula o total quando recebe o formulário completo com nome e cargo", () => {
-  const form = payrollSchema.parse({source:"essencial-payroll-v1",group:"funcionario",name:"Teste",role:"ASB",base:2000,additional:300,commission:100,bonus:200,discount:50});
+  const form = payrollSchema.parse({
+    source: "essencial-payroll-v1",
+    group: "funcionario",
+    name: "Teste",
+    role: "ASB",
+    base: 2000,
+    additional: 300,
+    commission: 100,
+    bonus: 200,
+    discount: 50,
+  });
   expect(payrollTotal(form)).toBe(2550);
+});
+
+it("corrige a data de um pagamento já registrado sem trocar seu status", () => {
+  expect(payrollPaymentDetails("pago", "fixa", "2026-09-17", "2026-11-09")).toEqual({
+    nature: "fixa",
+    paid_date: "2026-09-17",
+  });
+  expect(payrollPaymentDetails("pago", "variavel", "2026-09-18", "2026-11-09")).toEqual({
+    nature: "variavel",
+    paid_date: "2026-09-18",
+  });
+});
+it("não transforma pendências em pagamentos ao editar a remuneração", () => {
+  expect(payrollPaymentDetails("pendente", "fixa", "", "2026-11-09")).toEqual({ nature: "fixa" });
+  expect(payrollPaymentDetails(undefined, "variavel", "", "2026-11-09")).toEqual({
+    nature: "variavel",
+  });
+});
+it("recusa pagamentos com data impossível ou futura", () => {
+  expect(() => payrollPaymentDetails("pago", "fixa", "2026-02-30", "2026-11-09")).toThrow();
+  expect(() => payrollPaymentDetails("pago", "fixa", "2027-01-01", "2026-11-09")).toThrow();
 });

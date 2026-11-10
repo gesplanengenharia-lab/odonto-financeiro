@@ -15,7 +15,13 @@ import {
   type Txn,
   type PaymentMethod,
 } from "@/lib/finance";
-import { nextPayrollMonth, payrollSchema, readPayroll, type Payroll } from "@/lib/payroll";
+import {
+  nextPayrollMonth,
+  payrollSchema,
+  payrollPaymentDetails,
+  readPayroll,
+  type Payroll,
+} from "@/lib/payroll";
 import { categoriesQuery, myAccessQuery, txnsByCompetenceQuery } from "@/lib/queries";
 import { supabase } from "@/integrations/supabase/client";
 import { MonthPicker, PageHeader } from "@/components/finance/ui";
@@ -61,6 +67,8 @@ function MonthlyPayroll({ month }: { month: string }) {
   const [editing, setEditing] = useState<Txn | null>(null);
   const [form, setForm] = useState<Payroll | null>(null);
   const [due, setDue] = useState(range.end);
+  const [nature, setNature] = useState<"fixa" | "variavel">("fixa");
+  const [paidDate, setPaidDate] = useState("");
   const [method, setMethod] = useState<PaymentMethod>("pix");
   const [category, setCategory] = useState("");
   const [removeId, setRemoveId] = useState<string | null>(null);
@@ -155,7 +163,7 @@ function MonthlyPayroll({ month }: { month: string }) {
         description: `${data.group === "funcionario" ? "Funcionário" : "Dentista"}: ${data.name}`,
         person: data.name,
         category_id: category || null,
-        nature: data.group === "funcionario" ? ("fixa" as const) : ("variavel" as const),
+        ...payrollPaymentDetails(editing?.status, nature, paidDate, todayISO()),
         payment_method: method,
         competence_date: range.start,
         due_date: due,
@@ -164,18 +172,31 @@ function MonthlyPayroll({ month }: { month: string }) {
         fee_amount: 0,
         notes: JSON.stringify(data),
       };
-      const result = editing
-        ? await supabase
+      let update = editing
+        ? supabase
             .from("transactions")
             .update(payload)
             .eq("id", editing.id)
             .eq("status", editing.status)
             .eq("notes", editing.notes ?? "")
-            .select("id")
-        : await supabase
-            .from("transactions")
-            .insert({ ...payload, status: "pendente", created_by: userId })
-            .select("id");
+            .eq("gross_amount", editing.gross_amount)
+            .eq("due_date", editing.due_date)
+        : null;
+      if (update && editing) {
+        update =
+          editing.paid_date === null
+            ? update.is("paid_date", null)
+            : update.eq("paid_date", editing.paid_date);
+        update =
+          editing.nature === null ? update.is("nature", null) : update.eq("nature", editing.nature);
+      }
+      const result =
+        editing && update
+          ? await update.select("id")
+          : await supabase
+              .from("transactions")
+              .insert({ ...payload, status: "pendente", created_by: userId })
+              .select("id");
       if (result.error) throw result.error;
       if (!result.data?.length)
         throw new Error("O lançamento mudou. Atualize a folha antes de editar.");
@@ -226,6 +247,8 @@ function MonthlyPayroll({ month }: { month: string }) {
         discount: 0,
       },
     );
+    setNature(txn?.nature ?? (payroll?.group === "dentista" ? "variavel" : "fixa"));
+    setPaidDate(txn?.paid_date ?? txn?.due_date ?? "");
     setDue(txn?.due_date ?? range.end);
     setMethod(txn?.payment_method ?? "pix");
     setCategory(txn?.category_id ?? "");
@@ -335,7 +358,11 @@ function MonthlyPayroll({ month }: { month: string }) {
               Grupo
               <NativeSelect
                 value={form.group}
-                onChange={(e) => setForm({ ...form, group: e.target.value as Payroll["group"] })}
+                onChange={(e) => {
+                  const group = e.target.value as Payroll["group"];
+                  setForm({ ...form, group });
+                  if (!editing) setNature(group === "funcionario" ? "fixa" : "variavel");
+                }}
               >
                 <option value="funcionario">Funcionário fixo</option>
                 <option value="dentista">Dentista</option>
@@ -379,6 +406,28 @@ function MonthlyPayroll({ month }: { month: string }) {
               Vencimento
               <Input required type="date" value={due} onChange={(e) => setDue(e.target.value)} />
             </label>
+            <label>
+              Classificação da despesa
+              <NativeSelect
+                value={nature}
+                onChange={(e) => setNature(e.target.value as "fixa" | "variavel")}
+              >
+                <option value="fixa">Fixa</option>
+                <option value="variavel">Variável</option>
+              </NativeSelect>
+            </label>
+            {editing?.status === "pago" && (
+              <label>
+                Data do pagamento registrado
+                <Input
+                  required
+                  type="date"
+                  value={paidDate}
+                  max={todayISO()}
+                  onChange={(e) => setPaidDate(e.target.value)}
+                />
+              </label>
+            )}
             <label>
               Forma de pagamento
               <NativeSelect
@@ -537,9 +586,9 @@ function MonthlyPayroll({ month }: { month: string }) {
             <p className="px-5 pb-4 text-xs text-muted-foreground">
               {group === "funcionario"
                 ? "Despesas classificadas como fixas, incluindo os ajustes mensais informados."
-                : "Despesas classificadas como variáveis."}{" "}
-              A edição preserva a data e o status do pagamento. Para retirar um pagamento já
-              baixado, desfaça a baixa em Contas primeiro.
+                : "Remunerações fixas ou variáveis, conforme a classificação informada."}{" "}
+              A edição preserva o status e permite corrigir a data do pagamento registrado. Para
+              retirar um pagamento já baixado, desfaça a baixa em Contas primeiro.
             </p>
           </section>
         );

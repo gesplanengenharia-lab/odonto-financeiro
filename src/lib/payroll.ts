@@ -29,3 +29,17 @@ export function readPayroll(txn: Txn): Payroll | null {
 export function nextPayrollMonth(payroll: Payroll): Payroll {
   return { ...payroll, commission: 0, bonus: 0, discount: 0, vacation: 0, termination: 0 };
 }
+
+/** Editing payroll never changes its settlement status; paid dates are explicit. */
+export function payrollPaymentDetails(
+  status: Txn["status"] | undefined,
+  nature: "fixa" | "variavel",
+  paidDate: string,
+  today: string,
+) {
+  const checkedNature = z.enum(["fixa", "variavel"]).parse(nature);
+  if (status !== "pago") return { nature: checkedNature };
+  const date = z.string().date("Informe uma data de pagamento válida.").parse(paidDate);
+  if (date > today) throw new Error("O pagamento registrado não pode ter data futura.");
+  return { nature: checkedNature, paid_date: date };
+}
