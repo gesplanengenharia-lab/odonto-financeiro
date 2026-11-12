@@ -11,6 +11,7 @@ const views = [
   "formas",
   "contas",
   "dre",
+  "referencia",
   "diario",
   "exportar",
 ];

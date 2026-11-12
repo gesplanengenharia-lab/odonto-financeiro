@@ -45,6 +45,8 @@ const Forecast90Panel = lazy(() =>
 const BillingTab = lazy(() => import("./PainelTabs").then((m) => ({ default: m.BillingTab })));
 const CashPixTab = lazy(() => import("./PainelTabs").then((m) => ({ default: m.CashPixTab })));
 
+const ClinicDre = lazy(() => import("./ClinicDre").then((m) => ({ default: m.ClinicDre })));
+
 export function ManagementDetails({
   initialTab = "evolucao",
   onSelect,
@@ -58,7 +60,7 @@ export function ManagementDetails({
   const [selectedDay, setSelectedDay] = useState(today);
   const day = monthKey(selectedDay) === month ? selectedDay : `${month}-01`;
   const { start, end } = monthRange(month);
-  const needsCash = tab !== "exportar" && tab !== "faturamento";
+  const needsCash = tab !== "exportar" && tab !== "faturamento" && tab !== "referencia";
   const needsCompetence = ["formas", "dre"].includes(tab);
   const cashQuery = useQuery({ ...analysisRowsQuery(tab, month, today, day), enabled: needsCash });
   const compQuery = useQuery({ ...txnsByCompetenceQuery(start, end), enabled: needsCompetence });
@@ -144,6 +146,7 @@ export function ManagementDetails({
               <TabsTrigger value="previsao90">Caixa 90 dias</TabsTrigger>
               <TabsTrigger value="faturamento">Faturamento</TabsTrigger>
               <TabsTrigger value="formas">Recebimentos e contas</TabsTrigger>
+              <TabsTrigger value="referencia">DRE por referência</TabsTrigger>
               <TabsTrigger value="dre">DRE e custos</TabsTrigger>
               <TabsTrigger value="diario">Fechamento diário</TabsTrigger>
               <TabsTrigger value="exportar">Exportar</TabsTrigger>
@@ -173,6 +176,9 @@ export function ManagementDetails({
                 </p>
               }
             >
+              <TabsContent value="referencia">
+                <ClinicDre month={month} />
+              </TabsContent>
               <TabsContent value="faturamento">
                 <BillingTab
                   month={month}
