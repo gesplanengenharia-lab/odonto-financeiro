@@ -85,7 +85,10 @@ export function MonthlySheetImport() {
         }));
       if (!rows.length) throw new Error("Selecione os lançamentos que deseja importar.");
       const result = await importMonthlySheet(rows, fileName, false);
-      await qc.invalidateQueries({ queryKey: ["txns"] });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["txns"] }),
+        qc.invalidateQueries({ queryKey: ["treasury"] }),
+      ]);
       const skipped = result.rows.filter((r) => r.status !== "created").length;
       setMessage(
         result.inserted +
