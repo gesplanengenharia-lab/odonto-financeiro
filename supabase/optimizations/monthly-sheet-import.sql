@@ -1,4 +1,5 @@
 begin;
+create index if not exists transactions_monthly_import_match_idx on public.transactions(kind,payment_method,gross_amount,paid_date,due_date);
 create table if not exists public.monthly_sheet_rows (
   source_key text primary key,
   payload_hash text not null,
