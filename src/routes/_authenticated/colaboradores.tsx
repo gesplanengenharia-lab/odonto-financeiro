@@ -22,7 +22,12 @@ import {
   readPayroll,
   type Payroll,
 } from "@/lib/payroll";
-import { categoriesQuery, myAccessQuery, txnsByCompetenceQuery } from "@/lib/queries";
+import {
+  categoriesQuery,
+  myAccessQuery,
+  txnsByCompetenceQuery,
+  txnsByPaidQuery,
+} from "@/lib/queries";
 import { supabase } from "@/integrations/supabase/client";
 import { MonthPicker, PageHeader } from "@/components/finance/ui";
 import { NativeSelect } from "@/components/finance/LaunchDialog";
@@ -36,14 +41,27 @@ export const Route = createFileRoute("/_authenticated/colaboradores")({
 });
 function Colaboradores() {
   const [month, setMonth] = useFinancialMonth();
+  const [view, setView] = useState<"payment" | "competence">("payment");
   return (
     <div>
       <PageHeader
         title="Colaboradores"
-        subtitle="Salários, comissões e pagamentos de dentistas por mês"
+        subtitle="Funcionários e dentistas organizados pelo mês do pagamento"
         actions={<MonthPicker value={month} onChange={setMonth} />}
       />
-      <MonthlyPayroll key={month} month={month} />
+      <label className="mb-4 block max-w-sm">
+        Organizar por
+        <NativeSelect value={view} onChange={(e) => setView(e.target.value as typeof view)}>
+          <option value="payment">Pagamentos realizados no mês</option>
+          <option value="competence">Folha por competência</option>
+        </NativeSelect>
+      </label>
+      <MonthlyPayroll
+        key={month + view}
+        month={month}
+        view={view}
+        onManage={() => setView("competence")}
+      />
     </div>
   );
 }
@@ -56,12 +74,28 @@ const fields = [
   ["vacation", "Férias"],
   ["discount", "Descontos"],
 ] as const;
-function MonthlyPayroll({ month }: { month: string }) {
+function MonthlyPayroll({
+  month,
+  view,
+  onManage,
+}: {
+  month: string;
+  view: "payment" | "competence";
+  onManage: () => void;
+}) {
+  const byPayment = view === "payment";
   const range = monthRange(month);
-  const query = useQuery(txnsByCompetenceQuery(range.start, range.end));
+  const query = useQuery(
+    byPayment
+      ? txnsByPaidQuery(range.start, range.end)
+      : txnsByCompetenceQuery(range.start, range.end),
+  );
   const previousMonth = monthKey(addMonths(range.start, -1));
   const previousRange = monthRange(previousMonth);
-  const previous = useQuery(txnsByCompetenceQuery(undefined, previousRange.end));
+  const previous = useQuery({
+    ...txnsByCompetenceQuery(undefined, previousRange.end),
+    enabled: !byPayment,
+  });
   const categories = useQuery(categoriesQuery());
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Txn | null>(null);
@@ -165,12 +199,12 @@ function MonthlyPayroll({ month }: { month: string }) {
         category_id: category || null,
         ...payrollPaymentDetails(editing?.status, nature, paidDate, todayISO()),
         payment_method: method,
-        competence_date: range.start,
+        competence_date: editing?.competence_date ?? range.start,
         due_date: due,
         gross_amount: amount,
         net_amount: amount,
         fee_amount: 0,
-        notes: JSON.stringify(data),
+        notes: JSON.stringify({ ...(editing?.notes ? JSON.parse(editing.notes) : {}), ...data }),
       };
       let update = editing
         ? supabase
@@ -181,6 +215,7 @@ function MonthlyPayroll({ month }: { month: string }) {
             .eq("notes", editing.notes ?? "")
             .eq("gross_amount", editing.gross_amount)
             .eq("due_date", editing.due_date)
+            .eq("competence_date", editing.competence_date)
         : null;
       if (update && editing) {
         update =
@@ -271,77 +306,94 @@ function MonthlyPayroll({ month }: { month: string }) {
     );
   return (
     <>
-      <div className="surface-card mb-4 p-5">
-        <p className="text-sm text-muted-foreground">
-          Cada inclusão vale somente para o mês selecionado. Salvar cria uma despesa pendente que já
-          aparece em Contas e no DRE. Faça a baixa em Contas quando pagar. Edite aqui para evitar
-          lançar a mesma remuneração duas vezes.
-        </p>
-        <Button className="mt-3" onClick={() => open()} disabled={!!form || prepareAll.isPending}>
-          Acrescentar colaborador neste mês
-        </Button>
-      </div>
-      <section className="surface-card mb-4 p-5">
-        <h2 className="font-semibold">Equipe de referência</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          A última folha disponível fornece nomes, cargos, salário-base e adicionais. Comissão,
-          bonificação, descontos, férias e acerto final começam zerados. Confira e salve cada pessoa
-          para incluir a despesa neste mês.
-        </p>
-        {suggestions.length > 0 && (
-          <Button
-            className="mt-3"
-            disabled={!!form || prepareAll.isPending || previous.isFetching || query.isFetching}
-            onClick={() => prepareAll.mutate()}
-          >
-            {prepareAll.isPending ? "Incluindo equipe…" : "Incluir equipe inteira neste mês"}
+      {byPayment ? (
+        <div className="surface-card mb-4 p-5">
+          <p className="text-sm text-muted-foreground">
+            Apenas valores pagos na data efetiva deste mês. A competência original é preservada.
+          </p>
+          <Button className="mt-3" variant="outline" onClick={onManage}>
+            Gerenciar folha por competência
           </Button>
-        )}
-        {previous.isPending ? (
-          <p role="status">Carregando equipe anterior…</p>
-        ) : previous.isError ? (
-          <p role="alert">
-            Não foi possível carregar a equipe anterior.{" "}
-            <button className="underline" onClick={() => void previous.refetch()}>
-              Tentar novamente
-            </button>
-          </p>
-        ) : suggestions.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">
-            Nenhum colaborador do mês anterior aguardando inclusão.
-          </p>
-        ) : (
-          <ul className="mt-3 divide-y divide-border">
-            {suggestions.map(({ txn, payroll }) => (
-              <li
-                key={identity(payroll)}
-                className="flex flex-wrap items-center justify-between gap-3 py-3"
+        </div>
+      ) : (
+        <>
+          <div className="surface-card mb-4 p-5">
+            <p className="text-sm text-muted-foreground">
+              Cada inclusão vale somente para o mês selecionado. Salvar cria uma despesa pendente
+              que já aparece em Contas e no DRE. Faça a baixa em Contas quando pagar. Edite aqui
+              para evitar lançar a mesma remuneração duas vezes.
+            </p>
+            <Button
+              className="mt-3"
+              onClick={() => open()}
+              disabled={!!form || prepareAll.isPending}
+            >
+              Acrescentar colaborador neste mês
+            </Button>
+          </div>
+          <section className="surface-card mb-4 p-5">
+            <h2 className="font-semibold">Equipe de referência</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              A última folha disponível fornece nomes, cargos, salário-base e adicionais. Comissão,
+              bonificação, descontos, férias e acerto final começam zerados. Confira e salve cada
+              pessoa para incluir a despesa neste mês.
+            </p>
+            {suggestions.length > 0 && (
+              <Button
+                className="mt-3"
+                disabled={!!form || prepareAll.isPending || previous.isFetching || query.isFetching}
+                onClick={() => prepareAll.mutate()}
               >
-                <div>
-                  <strong>{payroll.name}</strong>
-                  <p className="text-sm text-muted-foreground">
-                    {payroll.group === "dentista" ? "Dentista" : "Funcionário"} ·{" "}
-                    {payroll.role || "Sem cargo"} · Base {formatBRL(payroll.base)} · Adicionais{" "}
-                    {formatBRL(payroll.additional)}
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  disabled={!!form || prepareAll.isPending}
-                  onClick={() => {
-                    open(undefined, nextPayrollMonth(payroll));
-                    setCategory(txn.category_id ?? "");
-                    setMethod(txn.payment_method);
-                    setDue(addMonths(txn.due_date, 1));
-                  }}
-                >
-                  Preparar neste mês
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                {prepareAll.isPending ? "Incluindo equipe…" : "Incluir equipe inteira neste mês"}
+              </Button>
+            )}
+            {previous.isPending ? (
+              <p role="status">Carregando equipe anterior…</p>
+            ) : previous.isError ? (
+              <p role="alert">
+                Não foi possível carregar a equipe anterior.{" "}
+                <button className="underline" onClick={() => void previous.refetch()}>
+                  Tentar novamente
+                </button>
+              </p>
+            ) : suggestions.length === 0 ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Nenhum colaborador do mês anterior aguardando inclusão.
+              </p>
+            ) : (
+              <ul className="mt-3 divide-y divide-border">
+                {suggestions.map(({ txn, payroll }) => (
+                  <li
+                    key={identity(payroll)}
+                    className="flex flex-wrap items-center justify-between gap-3 py-3"
+                  >
+                    <div>
+                      <strong>{payroll.name}</strong>
+                      <p className="text-sm text-muted-foreground">
+                        {payroll.group === "dentista" ? "Dentista" : "Funcionário"} ·{" "}
+                        {payroll.role || "Sem cargo"} · Base {formatBRL(payroll.base)} · Adicionais{" "}
+                        {formatBRL(payroll.additional)}
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      disabled={!!form || prepareAll.isPending}
+                      onClick={() => {
+                        open(undefined, nextPayrollMonth(payroll));
+                        setCategory(txn.category_id ?? "");
+                        setMethod(txn.payment_method);
+                        setDue(addMonths(txn.due_date, 1));
+                      }}
+                    >
+                      Preparar neste mês
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
+      )}
       {form && (
         <form
           className="surface-card mb-4 space-y-4 p-5"
@@ -491,11 +543,16 @@ function MonthlyPayroll({ month }: { month: string }) {
               <h2 className="text-lg font-semibold">
                 {group === "funcionario" ? "Funcionários fixos" : "Dentistas"}
               </h2>
-              <strong>{formatBRL(entries.reduce((sum, r) => sum + r.txn.gross_amount, 0))}</strong>
+              <strong>
+                {byPayment ? "Pago: " : "Total: "}
+                {formatBRL(entries.reduce((sum, r) => sum + r.txn.gross_amount, 0))}
+              </strong>
             </div>
             {!entries.length ? (
               <p className="px-5 pb-5 text-muted-foreground">
-                Nenhum colaborador neste grupo no mês.
+                {byPayment
+                  ? "Nenhum pagamento realizado neste grupo no mês."
+                  : "Nenhum colaborador neste grupo na competência."}
               </p>
             ) : (
               <div className="overflow-x-auto">
@@ -512,7 +569,8 @@ function MonthlyPayroll({ month }: { month: string }) {
                         "Férias",
                         "Descontos",
                         "Total",
-                        "Vencimento / situação",
+                        "Competência",
+                        "Pagamento / vencimento",
                         "Ações",
                       ].map((h) => (
                         <th key={h} className="px-4 py-3 text-left">
@@ -536,8 +594,13 @@ function MonthlyPayroll({ month }: { month: string }) {
                         <td className="px-4 py-3 font-semibold tabular whitespace-nowrap">
                           {formatBRL(txn.gross_amount)}
                         </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {txn.competence_date.slice(5, 7)}/{txn.competence_date.slice(0, 4)}
+                        </td>
                         <td className="px-4 py-3">
-                          {formatDate(txn.due_date)}
+                          <span className="text-xs text-muted-foreground">
+                            Vence {formatDate(txn.due_date)}
+                          </span>
                           <p>
                             {txn.status === "pago"
                               ? `Pago em ${formatDate(txn.paid_date)}`

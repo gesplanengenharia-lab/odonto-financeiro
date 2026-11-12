@@ -22,10 +22,10 @@ const PAGE = 1000;
 
 async function fetchTxns(
   filter: {
-    column: "due_date" | "competence_date";
+    column: "due_date" | "competence_date" | "paid_date";
     from?: string | undefined;
     to?: string | undefined;
-    status?: "pendente";
+    status?: "pendente" | "pago";
   },
   signal?: AbortSignal,
 ) {
@@ -64,6 +64,13 @@ export const txnsByCompetenceQuery = (from?: string, to?: string) =>
   queryOptions({
     queryKey: ["txns", "competence", from ?? "", to ?? ""],
     queryFn: ({ signal }) => fetchTxns({ column: "competence_date", from, to }, signal),
+  });
+
+/** Cash payments use the actual settlement date, independent of competence or due date. */
+export const txnsByPaidQuery = (from: string, to: string) =>
+  queryOptions({
+    queryKey: ["txns", "paid", from, to],
+    queryFn: ({ signal }) => fetchTxns({ column: "paid_date", from, to, status: "pago" }, signal),
   });
 
 export const pendingQuery = () =>
