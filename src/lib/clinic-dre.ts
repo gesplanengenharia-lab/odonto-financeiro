@@ -92,7 +92,11 @@ export function clinicDreAllocations(txn: Txn, category = ""): DreAllocation[] {
     if (base)
       allocations.push(
         entry(
-          p.group === "funcionario" ? "payroll" : "dentists",
+          p.group === "funcionario"
+            ? "payroll"
+            : /^avaliador(a)?$/.test(normalize(p.role.trim()))
+              ? "evaluator"
+              : "dentists",
           base,
           p.group === "funcionario"
             ? "Folha, adicionais, férias e acertos, líquidos dos descontos"
@@ -127,7 +131,8 @@ export function clinicDreAllocations(txn: Txn, category = ""): DreAllocation[] {
   else if (/(imposto|simples nacional|\bdas\b|\bdarf)/.test(d)) line = "taxes";
   else if (/seguro.*clinica|clinica.*seguro/.test(d)) line = "insurance";
   else if (/brintel|monitoramento|alarme/.test(d)) line = "monitoring";
-  else if (/cemig|copasa|internet|\bvivo\b|energia eletrica/.test(d + " " + c)) line = "utilities";
+  else if (/cemig|copasa|internet|\bvivo\b|energia eletrica|\bagua\b|\bluz\b/.test(d + " " + c))
+    line = "utilities";
   else if (/laboratorio.*interno/.test(d)) line = "lab_internal";
   else if (/laboratorio|protetico/.test(d) || /laboratorio/.test(c)) line = "lab_external";
   else if (/implante|neodent|straumann/.test(d)) line = "implants";
@@ -135,6 +140,7 @@ export function clinicDreAllocations(txn: Txn, category = ""): DreAllocation[] {
   else if (/\bhof\b|harmonizacao/.test(d)) line = "hof";
   else if (/dental|material odontologico/.test(d + " " + c)) line = "dental";
   else if (/avaliador/.test(d)) line = "evaluator";
+  else if (/dentista/.test(d + " " + c)) line = "dentists";
   else if (/bonifica|comissao|comisao/.test(d)) line = "bonuses";
   else if (/marketing|trafego|facebook|radio/.test(d + " " + c)) line = "marketing";
   else if (/estorn|devolu/.test(d) && /pacient|cliente|tratamento/.test(d)) line = "refunds";
