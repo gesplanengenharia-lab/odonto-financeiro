@@ -1325,3 +1325,113 @@ export function dashboardAlerts(txns: Txn[], today = todayISO()): DashboardAlert
   ];
   return alerts.filter((a) => a.count > 0);
 }
+
+export type ClinicGoalTargets = {
+  break_even: number;
+  target: number;
+  super_target: number;
+  mega_target: number;
+};
+export function validateClinicGoals(value: ClinicGoalTargets): ClinicGoalTargets {
+  const values = [value.break_even, value.target, value.super_target, value.mega_target];
+  if (values.some((v) => !Number.isFinite(v) || v <= 0 || v > 999999999))
+    throw new Error("Informe quatro valores positivos de até R$ 999.999.999,00.");
+  const rounded = values.map(round2);
+  if (rounded[0]! <= 0 || rounded.some((v, i) => i > 0 && v <= rounded[i - 1]!))
+    throw new Error("Use valores crescentes: clínica se paga < Meta < Super Meta < Mega Meta.");
+  return {
+    break_even: rounded[0]!,
+    target: rounded[1]!,
+    super_target: rounded[2]!,
+    mega_target: rounded[3]!,
+  };
+}
+/** Suggestions are an editable cash budget, never an inferred economic break-even. */
+export function suggestClinicGoals(expenses: number): ClinicGoalTargets {
+  if (!Number.isFinite(expenses) || expenses <= 0)
+    throw new Error("Não há despesas suficientes para sugerir uma base.");
+  const base = round2(expenses);
+  const step = (factor: number, previous: number) =>
+    Math.max(previous + 1, Math.ceil((base * factor) / 1000) * 1000);
+  const target = step(1.2, base),
+    superTarget = step(1.5, target);
+  return validateClinicGoals({
+    break_even: base,
+    target,
+    super_target: superTarget,
+    mega_target: step(2, superTarget),
+  });
+}
+/** Net cash follows actual payment dates. Sales, pending receipts and future-dated settlements never complete a goal. */
+export function clinicGoalsProgress(
+  rows: Txn[],
+  month: string,
+  goals: ClinicGoalTargets | null,
+  today = todayISO(),
+) {
+  const { start, end } = monthRange(month);
+  const receivedRows = rows.filter(
+    (t) =>
+      t.kind === "entrada" &&
+      t.status === "pago" &&
+      t.paid_date &&
+      t.paid_date >= start &&
+      t.paid_date <= end &&
+      t.paid_date <= today,
+  );
+  const received = round2(receivedRows.reduce((sum, t) => sum + t.net_amount, 0));
+  const pending = rows.filter(
+    (t) =>
+      t.kind === "entrada" && t.status === "pendente" && t.due_date >= start && t.due_date <= end,
+  );
+  const upcoming = round2(
+    pending.filter((t) => t.due_date >= today).reduce((sum, t) => sum + t.net_amount, 0),
+  );
+  const overdue = round2(
+    pending.filter((t) => t.due_date < today).reduce((sum, t) => sum + t.net_amount, 0),
+  );
+  const daysInMonth = Number(end.slice(8, 10));
+  const elapsed = today < start ? 0 : today > end ? daysInMonth : Number(today.slice(8, 10));
+  const daysRemaining = today > end ? 0 : today < start ? daysInMonth : daysInMonth - elapsed + 1;
+  const projection =
+    monthKey(today) === month && elapsed > 0 ? round2((received / elapsed) * daysInMonth) : null;
+  const checked = goals ? validateClinicGoals(goals) : null;
+  const definitions = checked
+    ? [
+        { key: "break_even", label: "Clínica se paga", value: checked.break_even },
+        { key: "target", label: "Meta", value: checked.target },
+        { key: "super_target", label: "Super Meta", value: checked.super_target },
+        { key: "mega_target", label: "Mega Meta", value: checked.mega_target },
+      ]
+    : [];
+  const levels = definitions.map((goal) => {
+    const remaining = round2(Math.max(0, goal.value - received));
+    return {
+      ...goal,
+      remaining,
+      reached: remaining === 0,
+      percent: round2((received / goal.value) * 100),
+      daily: daysRemaining > 0 ? Math.ceil((remaining / daysRemaining) * 100) / 100 : null,
+    };
+  });
+  const next = levels.find((level) => !level.reached) ?? null;
+  return {
+    received,
+    upcoming,
+    overdue,
+    projection,
+    daysRemaining,
+    levels,
+    next,
+    withUpcoming: round2(received + upcoming),
+    surplus: checked ? round2(received - checked.break_even) : null,
+    missingPaidDates: rows.filter(
+      (t) =>
+        t.kind === "entrada" &&
+        t.status === "pago" &&
+        !t.paid_date &&
+        t.due_date >= start &&
+        t.due_date <= end,
+    ).length,
+  };
+}

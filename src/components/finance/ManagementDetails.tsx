@@ -46,6 +46,7 @@ const BillingTab = lazy(() => import("./PainelTabs").then((m) => ({ default: m.B
 const CashPixTab = lazy(() => import("./PainelTabs").then((m) => ({ default: m.CashPixTab })));
 
 const ClinicDre = lazy(() => import("./ClinicDre").then((m) => ({ default: m.ClinicDre })));
+const ClinicGoals = lazy(() => import("./ClinicGoals").then((m) => ({ default: m.ClinicGoals })));
 
 export function ManagementDetails({
   initialTab = "evolucao",
@@ -60,7 +61,7 @@ export function ManagementDetails({
   const [selectedDay, setSelectedDay] = useState(today);
   const day = monthKey(selectedDay) === month ? selectedDay : `${month}-01`;
   const { start, end } = monthRange(month);
-  const needsCash = tab !== "exportar" && tab !== "faturamento" && tab !== "referencia";
+  const needsCash = !["exportar", "faturamento", "referencia", "metas"].includes(tab);
   const needsCompetence = ["formas", "dre"].includes(tab);
   const cashQuery = useQuery({ ...analysisRowsQuery(tab, month, today, day), enabled: needsCash });
   const compQuery = useQuery({ ...txnsByCompetenceQuery(start, end), enabled: needsCompetence });
@@ -142,6 +143,7 @@ export function ManagementDetails({
               aria-label="Análises detalhadas"
               className="h-auto w-max min-w-full justify-start"
             >
+              <TabsTrigger value="metas">Metas</TabsTrigger>
               <TabsTrigger value="evolucao">Crescimento</TabsTrigger>
               <TabsTrigger value="previsao90">Caixa 90 dias</TabsTrigger>
               <TabsTrigger value="faturamento">Faturamento</TabsTrigger>
@@ -176,6 +178,9 @@ export function ManagementDetails({
                 </p>
               }
             >
+              <TabsContent value="metas">
+                <ClinicGoals key={month} month={month} />
+              </TabsContent>
               <TabsContent value="referencia">
                 <ClinicDre month={month} />
               </TabsContent>

@@ -5,6 +5,7 @@ import { useFinancialMonth } from "@/hooks/use-financial-month";
 import { MonthPicker, PageHeader } from "@/components/finance/ui";
 
 const views = [
+  "metas",
   "evolucao",
   "previsao90",
   "faturamento",
