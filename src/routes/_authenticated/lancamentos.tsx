@@ -2,7 +2,13 @@ import { QueryFeedback } from "@/components/finance/QueryFeedback";
 import { useFinancialMonth } from "@/hooks/use-financial-month";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
+import { Button } from "@/components/ui/button";
+const MonthlySheetImport = lazy(() =>
+  import("@/components/finance/MonthlySheetImport").then((m) => ({
+    default: m.MonthlySheetImport,
+  })),
+);
 import { readPayroll } from "@/lib/payroll";
 import { pageHead } from "@/lib/head";
 import {
@@ -25,6 +31,7 @@ export const Route = createFileRoute("/_authenticated/lancamentos")({
 
 function Lancamentos() {
   const [month, setMonth] = useFinancialMonth();
+  const [importing, setImporting] = useState(false);
   const [kind, setKind] = useState("");
   const [method, setMethod] = useState("");
   const [search, setSearch] = useState("");
@@ -51,9 +58,17 @@ function Lancamentos() {
         actions={
           <>
             <MonthPicker value={month} onChange={setMonth} />
+            <Button variant="outline" onClick={() => setImporting(!importing)}>
+              {importing ? "Fechar importação" : "Importar Excel"}
+            </Button>
           </>
         }
       />
+      {importing && (
+        <Suspense fallback={<p role="status">Carregando importação…</p>}>
+          <MonthlySheetImport />
+        </Suspense>
+      )}
       <QueryFeedback
         loading={query.isPending}
         error={query.isError}
